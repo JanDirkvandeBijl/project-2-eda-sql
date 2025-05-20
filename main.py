@@ -2,6 +2,7 @@ from eda_service import EDAService
 from cleanup import DataFrameCleaner
 from loader import load_all_datasets
 import pandas as pd
+from ui import UI  # Assuming UI is in a file named `ui.py`
 
 try:
     df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets()
@@ -66,9 +67,9 @@ no_deliveries = df_inkooporderregels_clean[(df_inkooporderregels_clean['Delivery
 # print(len(no_deliveries))
 # print(no_deliveries.head())
 
-# Import necessary UI class and other dependencies
-from ui import UI  # Assuming UI is in a file named `ui.py`
-import pandas as pd
+
+
+
 
 # Create the UI instance
 ui = UI(df_inkooporderregels_clean)
