@@ -44,7 +44,8 @@ class EDAService:
             print(f"- {dtype}: {count} columns ({percentage:.1f}%)")
 
         print("\nExample column names by type:")
-        grouped = self.df.dtypes.groupby(self.df.dtypes)
+        dtypes_series = self.df.dtypes.astype(str)
+        grouped = dtypes_series.groupby(dtypes_series)
         for dtype, cols in grouped.groups.items():
             cols_list = list(cols)
             shown_cols = cols_list[:max_cols]
@@ -68,6 +69,15 @@ class EDAService:
             representative_values[col] = val
             print(f"- {col}: {repr(val)}")
 
+        print("\nColumns with only one unique value:")
+        single_value_columns = {}
+        for col in self.df.columns:
+            uniques = self.df[col].dropna().unique()
+            if self.df[col].nunique(dropna=False) == 1:
+                single_value = uniques[0] if len(uniques) > 0 else None
+                single_value_columns[col] = single_value
+                print(f"- {col}: {repr(single_value)}")
+        
         return representative_values
 
 
