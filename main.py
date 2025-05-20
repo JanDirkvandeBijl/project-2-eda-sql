@@ -1,7 +1,7 @@
 from eda_service import EDAService
 from cleanup import DataFrameCleaner
 from loader import load_all_datasets
-from IPython.display import display
+import pandas as pd
 
 try:
     df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets()
@@ -10,117 +10,59 @@ except Exception:
 
 
 
-#  drop-lijst = alle kolommen behalve degene in rename_map
-inkoop_columns_to_drop = {
-    'OrNu',
-    'Volgnummer',
-    'ItCd',
-    'Omschrijving',
-    'GuLiIOR',
-    'BronRegelGUID',
-    'Upri',
-    'Project',
-    'RegelStatus',
-    'QuUn',
-    'TypeItem',
-    'Opmerkingen',
-    'Referentie',
-    'ReferentieInkooprelatie',
-    'VoorraadBijhouden',
-    'StatusOrder',
-    'Opmerking',
-    'DsEx',
-    'V1Cd',
-    'Kostprijs',
-    'ModifiedDate',
-    'ModifiedDate1',
-    'ModifiedDate2',
-    'ModifiedDate3',
-    'ModifiedDate4',
-    'Definitief',
-    'Regelbedrag',
-    'WFS_ID',
-    'WFS_ISR_ID',
-    'WFS_DS_NR',
-    'TotalValue',
-    'AantalOntvangen',
-    'Korting',
-    'Verplichting',
-    'Verantwoordelijke',
-    'ItemCodeLeverancier',
-    'sNr',
-    'Gehad',
-    'Red',
-    'Naam'
-}
+# Define the columns you want to keep (relevant columns)
+# print(df_inkooporderregels.columns)
+relevant_columns_inkoop = [
+    'GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam'
+]
+# print(df_ontvangstregels.columns)
+relevant_columns_ontvangst = [
+    'BronregelGuid', 'Datum', 'TotaalOntvangen', 'NogTeOntvangen', 'Status_regel', 'Itemcode', 'Naam'
+]
 
-
-# conversies = subset van dtype_mapping_inkoop die je behoudt (alleen de te hernoemen kolommen)
+# Apply dtype conversions
 inkoop_columns_to_convert = {
-    'Datum': 'datetime',
-    'DatumToegezegd': 'datetime',
-    'AfwijkendeAfleverdatum': 'datetime',
-    'Vrijgegeven_op': 'datetime',
-    'getDate': 'datetime',
-    'CrId': 'int64',
+    'Datum': 'datetime', 
+    'DatumToegezegd': 'datetime', 
+    'AfwijkendeAfleverdatum': 'datetime', 
+    'Vrijgegeven_op': 'datetime', 
+    'getDate': 'datetime', 
+    'Naam': 'str'
 }
 
-# inkoop_rename_map = {
-#     "Naam": "SupplierName",
-#     "DatumInkooporder": "OrderDate",
-#     "AfwijkendeAfleverdatum": "AdjustedDeliveryDate",
-#     "DatumToegezegd": "DatumToegezegd"
-# }
+# Clean data for df_inkooporderregels
+cleaner = DataFrameCleaner(df_inkooporderregels, name="df_inkooporderregels")
+cleaner.apply_dtype_mapping(inkoop_columns_to_convert)  # Apply dtype conversions
+df_inkooporderregels_clean = cleaner.get_cleaned_df()[relevant_columns_inkoop]
 
+# Clean data for df_ontvangstregels
+cleaner2 = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
+df_ontvangstregels_clean = cleaner2.get_cleaned_df()[relevant_columns_ontvangst]
 
-# Reiniging uitvoeren
-cleaner = DataFrameCleaner(df_inkooporderregels, name="Inkooporderregels")
-
-cleaner.drop_columns(inkoop_columns_to_drop)
-cleaner.apply_dtype_mapping(inkoop_columns_to_convert)
-# cleaner.rename_columns(inkoop_rename_map)
-cleaner.normalize_nones()
-df_inkooporderregels = cleaner.get_cleaned_df()
-
-# EDA uitvoeren
-# eda = EDAService(df_inkooporderregels, name="Inkooporderregels")
+# Optionally, run the EDA service (unchanged part)
+# eda = EDAService(df_ontvangstregels_clean, name="df_ontvangstregels")
 # eda.run_step(1)
 
+# Merge df_inkooporderregels_clean with df_ontvangstregels_clean on 'GuLiIOR' and 'BronregelGuid'
+merged_df = pd.merge(df_inkooporderregels_clean, df_ontvangstregels_clean, 
+                     left_on=['GuLiIOR'], right_on=['BronregelGuid'], how='left')
+print(merged_df[['GuLiIOR', 'BronregelGuid', 'TotaalOntvangen']].head())
+# Add the total deliveries column to df_inkooporderregels_clean
+df_inkooporderregels_clean['TotalDeliveries'] = merged_df.groupby('GuLiIOR')['BronregelGuid'].transform('count')
 
+# Get the most recent delivery date for each GuLiIOR from df_ontvangstregels_clean
+latest_delivery_date = df_ontvangstregels_clean.groupby('BronregelGuid')['Datum'].max()
 
-# relation_rename = {
-#     "Naam": "Name",
-#     "Geblokkeerd": "Blocked",
-#     "DbId": "Id"
-# }
-# suppliers_to_drop = [
-#     'BcCo', 'StraatHuisnr', 'PostcodeWoonplaats', 'Land', 
-#     'TelNr', 'Email', 'IBAN', 'Btwnr', 'KvKnr', 'Betalingsvoorwaarde', 
-#     'KredietLimiet', 'TempBlocked', 'BtwPlicht', 'Blocked', 'CreateDate', 
-#     'ModifiedDate', 'IsCrediteur', 'Niet_tonen_in_inkooporderlijst', 
-#     'AfwijkendEmail', 'sNr'
-# ]
- 
-# suppliers_mapping = {
-#     'CrId': 'int64',
-#     'Naam': 'str'
-# }
+# Merge the most recent delivery date back into df_inkooporderregels_clean
+df_inkooporderregels_clean['DeliveryDate'] = df_inkooporderregels_clean['GuLiIOR'].map(latest_delivery_date)
 
-# suppliers_cleaner = DataFrameCleaner(df_suppliers, name="df_suppliers")
-# suppliers_cleaner.drop_columns(suppliers_to_drop)
-# suppliers_cleaner.apply_dtype_mapping(suppliers_mapping)
-# # relation_cleaner.rename_columns(relation_rename)
-# df_suppliers = suppliers_cleaner.get_cleaned_df()
+# Check the result
+print(df_inkooporderregels_clean.head())
+print(df_ontvangstregels_clean.head())
+# # Create the UI instance
+# from ui import UI  # Assuming UI is in a file named `ui.py`
 
-# eda = EDAService(df_suppliers, name="df_suppliers")
-# eda.run_step(1)
-# print(df_inkooporderregels.columns.tolist())
-
-
-
-# df_inkooporderregels = df_inkooporderregels.merge(df_suppliers[['CrId', 'Naam']], on='CrId', how='left')
-
-
-# display(df_suppliers.head())
-
-display(df_inkooporderregels.head())
+# # Instantiate the UI class and run it
+# ui = UI(df_inkooporderregels_clean)
+# ui.year_selection()  # Call the year selection method
+# ui.show_date_analysis()  # Display the analysis and plot based on selected year
