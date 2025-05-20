@@ -66,10 +66,18 @@ no_deliveries = df_inkooporderregels_clean[(df_inkooporderregels_clean['Delivery
 # print(len(no_deliveries))
 # print(no_deliveries.head())
 
-# Create the UI instance
+# Import necessary UI class and other dependencies
 from ui import UI  # Assuming UI is in a file named `ui.py`
+import pandas as pd
 
-# Instantiate the UI class and run it
+# Create the UI instance
 ui = UI(df_inkooporderregels_clean)
+
+# Select year for analysis
 ui.year_selection()  # Call the year selection method
-ui.show_date_analysis()  # Display the analysis and plot based on selected year
+
+# Select suppliers for analysis
+ui.supplier_selection()  # Call the supplier selection method
+
+# Display the analysis and plot based on the selected year and suppliers
+ui.show_date_analysis()  # Display the analysis and plot based on selected year and suppliers
