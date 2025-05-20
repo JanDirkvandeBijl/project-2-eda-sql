@@ -63,16 +63,13 @@ no_deliveries = df_inkooporderregels_clean[(df_inkooporderregels_clean['Delivery
                                             (df_inkooporderregels_clean['TotalDeliveries'] == 0)]
 
 # Print the first few rows
-print(len(no_deliveries))
-print(no_deliveries.head())
+# print(len(no_deliveries))
+# print(no_deliveries.head())
 
-# Check the result
-# print(df_inkooporderregels_clean.head())
-# print(df_ontvangstregels_clean.head())
-# # Create the UI instance
-# from ui import UI  # Assuming UI is in a file named `ui.py`
+# Create the UI instance
+from ui import UI  # Assuming UI is in a file named `ui.py`
 
-# # Instantiate the UI class and run it
-# ui = UI(df_inkooporderregels_clean)
-# ui.year_selection()  # Call the year selection method
-# ui.show_date_analysis()  # Display the analysis and plot based on selected year
+# Instantiate the UI class and run it
+ui = UI(df_inkooporderregels_clean)
+ui.year_selection()  # Call the year selection method
+ui.show_date_analysis()  # Display the analysis and plot based on selected year
