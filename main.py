@@ -9,7 +9,7 @@ except Exception:
     exit(1)
 
 
-
+print(len(df_inkooporderregels))
 # Define the columns you want to keep (relevant columns)
 # print(df_inkooporderregels.columns)
 relevant_columns_inkoop = [
@@ -36,8 +36,9 @@ cleaner.apply_dtype_mapping(inkoop_columns_to_convert)  # Apply dtype conversion
 df_inkooporderregels_clean = cleaner.get_cleaned_df()[relevant_columns_inkoop]
 
 # Clean data for df_ontvangstregels
-cleaner2 = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
-df_ontvangstregels_clean = cleaner2.get_cleaned_df()[relevant_columns_ontvangst]
+# cleaner2 = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
+# df_ontvangstregels_clean = cleaner2.get_cleaned_df()[relevant_columns_ontvangst]
+df_ontvangstregels_clean = df_ontvangstregels
 
 # Optionally, run the EDA service (unchanged part)
 # eda = EDAService(df_ontvangstregels_clean, name="df_ontvangstregels")
@@ -55,10 +56,19 @@ latest_delivery_date = df_ontvangstregels_clean.groupby('BronregelGuid')['Datum'
 
 # Merge the most recent delivery date back into df_inkooporderregels_clean
 df_inkooporderregels_clean['DeliveryDate'] = df_inkooporderregels_clean['GuLiIOR'].map(latest_delivery_date)
+print(len(df_inkooporderregels_clean))
+
+# Filter the rows where 'DeliveryDate' is NaT and 'TotalDeliveries' is 0
+no_deliveries = df_inkooporderregels_clean[(df_inkooporderregels_clean['DeliveryDate'].isna()) & 
+                                            (df_inkooporderregels_clean['TotalDeliveries'] == 0)]
+
+# Print the first few rows
+print(len(no_deliveries))
+print(no_deliveries.head())
 
 # Check the result
-print(df_inkooporderregels_clean.head())
-print(df_ontvangstregels_clean.head())
+# print(df_inkooporderregels_clean.head())
+# print(df_ontvangstregels_clean.head())
 # # Create the UI instance
 # from ui import UI  # Assuming UI is in a file named `ui.py`
 
