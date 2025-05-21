@@ -12,11 +12,11 @@ except Exception:
 
 # Define relevant columns to retain for analysis
 relevant_columns_inkoop = [
-    'GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID'
+    'GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID', 'QuUn'
 ]
 
 relevant_columns_ontvangst = [
-    'BronregelGuid', 'Datum', 'TotaalOntvangen', 'NogTeOntvangen', 'Status_regel', 'Itemcode', 'Naam'
+    'BronregelGuid', 'Datum', 'AantalOntvangen', 'Status_regel', 'Itemcode', 'Naam'
 ]
 
 # Define columns to convert to specific dtypes
@@ -45,6 +45,7 @@ df_ontvangstregels_clean = cleaner2.get_cleaned_df()[relevant_columns_ontvangst]
 # 3. ExpectedDeliveryDate is resolved from either of the two.
 # 4. TODO: Handle cases where both are missing.
 
+# ExpectedDeliveryDate is resolved from either AfwijkendeAfleverdatum or DatumToegezegd
 df_inkooporderregels_clean['ExpectedDeliveryDate'] = df_inkooporderregels_clean['AfwijkendeAfleverdatum'].combine_first(
     df_inkooporderregels_clean['DatumToegezegd']
 )
@@ -65,8 +66,7 @@ delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
 # Map count of deliveries to GuLiIOR
 items_without_delivery_date['DeliveryCount'] = items_without_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
 
-# --- Logging the issue scope ---
-
+# Logging: how many have no deliveries
 missing_total = len(items_without_delivery_date)
 missing_with_no_delivery = (items_without_delivery_date['DeliveryCount'] == 0).sum()
 
@@ -75,6 +75,31 @@ print(
         missing_total,
         missing_with_no_delivery,
         (missing_with_no_delivery / missing_total) * 100
+    )
+)
+
+# --- Additional analysis: full delivery status ---
+
+# Group ontvangstregels by BronregelGuid and sum AantalOntvangen
+total_received_per_line = df_ontvangstregels_clean.groupby('BronregelGuid')['AantalOntvangen'].sum()
+
+# Map total received amount to items_without_delivery_date via GuLiIOR
+items_without_delivery_date['TotalReceived'] = items_without_delivery_date['GuLiIOR'].map(total_received_per_line).fillna(0).astype(float)
+
+# Ensure QuUn is numeric and non-null
+items_without_delivery_date['QuUn'] = items_without_delivery_date['QuUn'].fillna(0).astype(float)
+
+# Determine full delivery
+items_without_delivery_date['FullyDelivered'] = items_without_delivery_date['TotalReceived'] >= items_without_delivery_date['QuUn']
+
+# Logging: how many lines are fully delivered
+fully_delivered_count = items_without_delivery_date['FullyDelivered'].sum()
+
+print(
+    "Items without expected delivery date: {}, fully delivered: {} ({:.2f}%)".format(
+        missing_total,
+        fully_delivered_count,
+        (fully_delivered_count / missing_total) * 100
     )
 )
 
@@ -93,10 +118,7 @@ items_with_delivery_date = df_inkooporderregels_clean[
 delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
 
 # Map count of deliveries to GuLiIOR
-items_with_delivery_date['DeliveryCount'] = items_with_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0)
-
-# Convert to integer
-items_with_delivery_date['DeliveryCount'] = items_with_delivery_date['DeliveryCount'].astype(int)
+items_with_delivery_date['DeliveryCount'] = items_with_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
 
 # Logging: how many have 0 deliveries
 valid_total = len(items_with_delivery_date)
@@ -109,7 +131,30 @@ print(
         (valid_with_no_delivery / valid_total) * 100
     )
 )
-#Result is: Items with expected delivery date: 10252, of which have no deliveries: 524 (5.11%)
+
+# --- Additional analysis: full delivery status ---
+# Group ontvangstregels by BronregelGuid and sum AantalOntvangen
+total_received_per_line = df_ontvangstregels_clean.groupby('BronregelGuid')['AantalOntvangen'].sum()
+
+# Map total received amount to items_with_delivery_date via GuLiIOR
+items_with_delivery_date['TotalReceived'] = items_with_delivery_date['GuLiIOR'].map(total_received_per_line).fillna(0).astype(float)
+
+# Ensure QuUn is numeric and non-null
+items_with_delivery_date['QuUn'] = items_with_delivery_date['QuUn'].fillna(0).astype(float)
+
+# Determine full delivery
+items_with_delivery_date['FullyDelivered'] = items_with_delivery_date['TotalReceived'] >= items_with_delivery_date['QuUn']
+
+# Logging: how many lines are fully delivered
+fully_delivered_count = items_with_delivery_date['FullyDelivered'].sum()
+
+print(
+    "Items with expected delivery date: {}, fully delivered: {} ({:.2f}%)".format(
+        valid_total,
+        fully_delivered_count,
+        (fully_delivered_count / valid_total) * 100
+    )
+)
 
 
 
