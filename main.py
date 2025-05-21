@@ -20,7 +20,7 @@ except Exception:
 # Relevant Columns and Type Mappings
 # -----------------------------
 # Specify relevant columns for analysis and expected data types
-relevant_columns_inkoop = ['GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID', 'QuUn']
+relevant_columns_inkoop = ['GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID', 'QuUn', 'OrNu']
 relevant_columns_ontvangst = ['BronregelGuid', 'Datum', 'AantalOntvangen', 'Status_regel', 'Itemcode', 'Naam']
 inkoop_columns_to_convert = {
     'Datum': 'datetime',
@@ -30,6 +30,38 @@ inkoop_columns_to_convert = {
     'getDate': 'datetime',
     'Naam': 'str'
 }
+# regels_per_order = df_inkooporderregels['OrNu'].value_counts()
+# print(f"Aantal unieke orders: {regels_per_order.count()}")
+# print(f"Totaal aantal regels: {len(df_inkooporderregels)}")
+# print(f"Gemiddeld aantal regels per order: {regels_per_order.mean():.2f}")
+# print(f"Mediaan aantal regels per order: {regels_per_order.median()}")
+# print(f"Aantal orders met precies 1 regel: {(regels_per_order == 1).sum()}")
+# print(f"Aantal orders met 5 regels: {(regels_per_order >= 5).sum()}")
+
+# print()
+
+# regels_per_bron = df_inkooporderregels['BronRegelGUID'].value_counts()
+
+# print(f"Aantal unieke BronRegelGUIDs: {regels_per_bron.count()}")
+# print(f"Totaal aantal regels met niet-lege BronRegelGUID: {regels_per_bron.sum()}")
+# print(f"Gemiddeld aantal regels per BronRegelGUID: {regels_per_bron.mean():.2f}")
+# print(f"Mediaan aantal regels per BronRegelGUID: {regels_per_bron.median()}")
+# print(f"Aantal BronRegelGUIDs die slechts 1 regel hebben: {(regels_per_bron == 1).sum()}")
+# print(f"Aantal BronRegelGUIDs met 5 gekoppelde regels: {(regels_per_bron >= 5).sum()}")
+# print()
+
+
+# regels_per_guliior = df_inkooporderregels['GuLiIOR'].value_counts()
+
+# print(f"Aantal unieke GuLiIORs: {regels_per_guliior.count()}")
+# print(f"Totaal aantal regels met niet-lege GuLiIOR: {regels_per_guliior.sum()}")
+# print(f"Gemiddeld aantal regels per GuLiIOR: {regels_per_guliior.mean():.2f}")
+# print(f"Mediaan aantal regels per GuLiIOR: {regels_per_guliior.median()}")
+# print(f"Aantal GuLiIORs die slechts 1 regel hebben: {(regels_per_guliior == 1).sum()}")
+# print(f"Aantal GuLiIORs met 5 gekoppelde regels: {(regels_per_guliior >= 5).sum()}")
+# print()
+# print()
+# print()
 
 # -----------------------------
 # Cleaning and Preparation
@@ -42,6 +74,7 @@ df_inkooporderregels_clean = cleaner_inkoop.get_cleaned_df()[relevant_columns_in
 # Clean delivery receipt lines
 cleaner_ontvangst = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
 df_ontvangstregels_clean = cleaner_ontvangst.get_cleaned_df()[relevant_columns_ontvangst].copy()
+print("Aantal rijen met lege BronRegelGUID:", df_inkooporderregels_clean['BronRegelGUID'].isna().sum())
 
 # -----------------------------
 # Deriving Expected Delivery Dates
@@ -57,7 +90,9 @@ df_inkooporderregels_clean.drop(columns=['AfwijkendeAfleverdatum', 'DatumToegeze
 # -----------------------------
 # Subset lines without expected delivery date
 items_without_date = df_inkooporderregels_clean[df_inkooporderregels_clean['ExpectedDeliveryDate'].isna()].copy()
-
+unique_orders3 = items_without_date['BronRegelGUID'].unique()
+print(len(items_without_date))
+print(len(unique_orders3))
 # Map number of deliveries per BronregelGuid to GuLiIOR
 delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
 items_without_date['DeliveryCount'] = items_without_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
@@ -92,6 +127,9 @@ print(f"Items without expected delivery date: {missing_total}, fully delivered: 
 # -----------------------------
 # Subset lines with expected delivery date
 items_with_date = df_inkooporderregels_clean[df_inkooporderregels_clean['ExpectedDeliveryDate'].notna()].copy()
+unique_orders2 = items_with_date['BronRegelGUID'].unique()
+print(len(items_with_date))
+print(len(unique_orders2))
 
 # Map delivery counts again (already computed above)
 items_with_date['DeliveryCount'] = items_with_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
@@ -149,6 +187,10 @@ print(missing_summary)
 # Actions
 # 1 I will try to hunt down the reason why it still happens sometimes and try to fill them later 
 # 2 I will remove the years 2021 and 2022 from this evaluation to minimize the impact of that since its older data this is fine for now -> maybe when i know the reason for action 1 i will add them back
+# Filter regels waar BronRegelGUID niet leeg is
+# Aantal unieke orders
+
+
 
 # Define years to exclude
 years_to_exclude = [2021, 2022]
@@ -179,7 +221,6 @@ print(
 
 print(items_with_date.columns)
 # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
-
 
 
 
