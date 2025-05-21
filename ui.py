@@ -2,7 +2,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
-
+st.set_page_config(layout="wide")
 class UI:
     def __init__(self, df):
         self.original_df = df.copy()
@@ -58,13 +58,13 @@ class UI:
             return
 
         counts = df['Naam'].value_counts()
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(20, 6))  # Verbreden
         sns.barplot(x=counts.index, y=counts.values, color='salmon')
-        plt.xticks(rotation=90)
+        plt.xticks(rotation=45, ha='right')
         plt.title("Bestellingen zonder daadwerkelijke leverdatum")
         plt.xlabel("Leverancier")
         plt.ylabel("Aantal")
-        st.pyplot(plt.gcf())
+        st.pyplot(plt.gcf(), use_container_width=True)
 
     def plot_fully_delivered(self):
         delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
@@ -73,13 +73,13 @@ class UI:
             return
 
         counts = delivered['Naam'].value_counts()
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(20, 6))  # Verbreden
         sns.barplot(x=counts.index, y=counts.values, color='lightgreen')
-        plt.xticks(rotation=90)
+        plt.xticks(rotation=45, ha='right')
         plt.title("Volledig Geleverde Bestellingen")
         plt.xlabel("Leverancier")
         plt.ylabel("Aantal")
-        st.pyplot(plt.gcf())
+        st.pyplot(plt.gcf(), use_container_width=True)
 
     def plot_delivery_counts(self):
         grouped = self.filtered_df.groupby('Naam')['DeliveryCount'].sum()
@@ -87,13 +87,13 @@ class UI:
             st.info("Geen leveringen geregistreerd.")
             return
 
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(20, 6))  # Verbreden
         sns.barplot(x=grouped.index, y=grouped.values, color='orange')
-        plt.xticks(rotation=90)
+        plt.xticks(rotation=45, ha='right')
         plt.title("Totaal aantal leveringen per leverancier")
         plt.xlabel("Leverancier")
         plt.ylabel("Aantal leveringen")
-        st.pyplot(plt.gcf())
+        st.pyplot(plt.gcf(), use_container_width=True)
 
     def plot_performance_over_time(self):
         df = self.filtered_df.copy()
@@ -103,8 +103,9 @@ class UI:
             st.info("Geen tijdsgebonden leveringsdata beschikbaar.")
             return
 
-        timeseries.plot(figsize=(12, 6))
+        timeseries.plot(figsize=(20, 6))  # Verbreden
         plt.title("Leverfrequentie per maand")
         plt.xlabel("Maand")
         plt.ylabel("Aantal Leveringen")
-        st.pyplot(plt.gcf())
+        plt.xticks(rotation=45)
+        st.pyplot(plt.gcf(), use_container_width=True)

@@ -1,2 +1,37 @@
-# Ignore all .json files
+# Visual Studio cache en gebruikersinstellingen
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.VC.db
+
+# Visual Studio .db & .wal bestanden
+*.db
+*.db-shm
+*.db-wal
+*.vsidx
+
+# Python __pycache__ directory en .pyc bestanden
+__pycache__/
+*.py[cod]
+
+# SQLite databasebestanden (optioneel — als die lokaal zijn)
+*.sqlite
+
+# JetBrains IDE's (optioneel)
+.idea/
+
+# VS Code settings (optioneel)
+.vscode/
+
+# Systeembestanden
+.DS_Store
+Thumbs.db
+
+# Logs en tijdelijke bestanden
+*.log
+*.tmp
+
+# JSON uitsluiten (alleen als je dit echt wilt)
 *.json
