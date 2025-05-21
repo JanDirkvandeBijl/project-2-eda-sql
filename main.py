@@ -54,24 +54,21 @@ df_inkooporderregels_clean.drop(columns=['AfwijkendeAfleverdatum', 'DatumToegeze
 
 # --- Identify faulty rows (missing expected delivery date) ---
 
-# These records must be investigated
+# Filter lines without an expected delivery date
 items_without_delivery_date = df_inkooporderregels_clean[
     df_inkooporderregels_clean['ExpectedDeliveryDate'].isna()
 ].copy()
 
-# Group ontvangstregels by BronregelGuid and sum received quantities
-delivery_sums = df_ontvangstregels_clean.groupby('BronregelGuid')['TotaalOntvangen'].sum()
+# Count how many ontvangstregels are linked to each BronregelGuid
+delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
 
-# Map the delivery totals to items_without_delivery_date using GuLiIOR
-items_without_delivery_date['Deliveries'] = items_without_delivery_date['GuLiIOR'].map(delivery_sums)
-
-# Fill missing values with 0 for unmatched items
-items_without_delivery_date['Deliveries'] = items_without_delivery_date['Deliveries'].fillna(0)
+# Map count of deliveries to GuLiIOR
+items_without_delivery_date['DeliveryCount'] = items_without_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
 
 # --- Logging the issue scope ---
 
 missing_total = len(items_without_delivery_date)
-missing_with_no_delivery = (items_without_delivery_date['Deliveries'] == 0).sum()
+missing_with_no_delivery = (items_without_delivery_date['DeliveryCount'] == 0).sum()
 
 print(
     "Items without expected delivery date: {}, of which have no deliveries: {} ({:.2f}%)".format(
@@ -79,16 +76,40 @@ print(
         missing_with_no_delivery,
         (missing_with_no_delivery / missing_total) * 100
     )
-) 
-# Result is: Items without expected delivery date: 3270, of which have no deliveries: 3235 (98.93%)
-# Conclusion -> We will create a seperate visual for these record and investigate later how these happen most likely these are canceled orders
+)
+
+# Result is: Items without expected delivery date: 3270, of which have no deliveries: 283 (8.65%)
+# Conclusion -> We will need to find out why these dates arent filled to make them work in our vissuals
 
 
 
 # Subset 3: Correct lines (ExpectedDeliveryDate is filled)
-items_with_delivery_date = df_inkooporderregels_clean[df_inkooporderregels_clean['ExpectedDeliveryDate'].notna()].copy()
+# Filter only the valid lines with a known expected delivery date
+items_with_delivery_date = df_inkooporderregels_clean[
+    df_inkooporderregels_clean['ExpectedDeliveryDate'].notna()
+].copy()
 
+# Count how many ontvangstregels are linked to each BronregelGuid
+delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
 
+# Map count of deliveries to GuLiIOR
+items_with_delivery_date['DeliveryCount'] = items_with_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0)
+
+# Convert to integer
+items_with_delivery_date['DeliveryCount'] = items_with_delivery_date['DeliveryCount'].astype(int)
+
+# Logging: how many have 0 deliveries
+valid_total = len(items_with_delivery_date)
+valid_with_no_delivery = (items_with_delivery_date['DeliveryCount'] == 0).sum()
+
+print(
+    "Items with expected delivery date: {}, of which have no deliveries: {} ({:.2f}%)".format(
+        valid_total,
+        valid_with_no_delivery,
+        (valid_with_no_delivery / valid_total) * 100
+    )
+)
+#Result is: Items with expected delivery date: 10252, of which have no deliveries: 524 (5.11%)
 
 
 
