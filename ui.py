@@ -4,121 +4,107 @@ import seaborn as sns
 import pandas as pd
 
 class UI:
-    def __init__(self, df_inkooporderregels):
-        self.df_inkooporderregels = df_inkooporderregels
+    def __init__(self, df):
+        self.original_df = df.copy()
         self.selected_year = None
         self.selected_suppliers = None
-        self.filtered_df = None
+        self.filtered_df = df.copy()
 
     def year_selection(self):
-        # Year input via Streamlit
-        self.selected_year = st.selectbox('Selecteer een jaar voor de analyse:', self.df_inkooporderregels['Datum'].dt.year.unique())
-
-        # Filter the data for the selected year
-        self.filtered_df = self.df_inkooporderregels[self.df_inkooporderregels['Datum'].dt.year == self.selected_year]
+        years = sorted(self.original_df['Datum'].dt.year.unique())
+        self.selected_year = st.selectbox('Selecteer een jaar voor de analyse:', years)
+        self.filtered_df = self.original_df[self.original_df['Datum'].dt.year == self.selected_year]
 
     def supplier_selection(self):
-        # Multiselect filter for suppliers
-        supplier_options = self.df_inkooporderregels['Naam'].unique()
-        self.selected_suppliers = st.multiselect('Selecteer leveranciers voor de analyse:', supplier_options)
+        if self.filtered_df.empty:
+            st.warning("Geen data beschikbaar voor het geselecteerde jaar.")
+            return
 
-        # Filter the data for the selected suppliers
+        suppliers = sorted(self.filtered_df['Naam'].dropna().unique())
+        self.selected_suppliers = st.multiselect('Selecteer leveranciers:', suppliers)
+
         if self.selected_suppliers:
             self.filtered_df = self.filtered_df[self.filtered_df['Naam'].isin(self.selected_suppliers)]
 
     def show_date_analysis(self):
-        if self.selected_year is None or self.filtered_df is None:
+        if self.filtered_df.empty:
+            st.warning("Geen data beschikbaar na filtering.")
             return
 
-        # Date-related plots
-        st.subheader('Date Analysis for Troubleshooting Suppliers')
+        st.subheader(f"Analyse voor jaar {self.selected_year}")
+        tabs = st.tabs([
+            "Geen Leverdatum", 
+            "Volledig Geleverd", 
+            "Aantal Leveringen", 
+            "Tijdsprestatie"
+        ])
 
-        # ** Missing Deliveries per Supplier **
-        st.write(f"""
-        Deze grafiek toont het aantal bestellingen die niet geleverd zijn per leverancier voor het jaar {self.selected_year}. 
-        Dit helpt bij het identificeren van leveranciers die niet voldoen aan de afgesproken leveringen.
-        """)
+        with tabs[0]:
+            self.plot_missing_delivery_date()
 
-        # Grouping by Supplier ('Naam') and counting missing deliveries (TotalDeliveries == 0)
-        missing_deliveries = self.filtered_df[self.filtered_df['TotalDeliveries'] == 0].groupby('Naam').size()
+        with tabs[1]:
+            self.plot_fully_delivered()
 
+        with tabs[2]:
+            self.plot_delivery_counts()
+
+        with tabs[3]:
+            self.plot_performance_over_time()
+
+    def plot_missing_delivery_date(self):
+        df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
+        if df.empty:
+            st.info("Alle bestellingen zijn geleverd of hebben een leverdatum.")
+            return
+
+        counts = df['Naam'].value_counts()
         plt.figure(figsize=(12, 6))
-        sns.barplot(x=missing_deliveries.index, y=missing_deliveries.values, color='salmon')
-        plt.title(f'Missing Deliveries per Supplier voor {self.selected_year}')
-        plt.xlabel('Leverancier')
-        plt.ylabel('Aantal Ontbrekende Leveringen')
+        sns.barplot(x=counts.index, y=counts.values, color='salmon')
         plt.xticks(rotation=90)
-        st.pyplot(fig=plt.gcf())
+        plt.title("Bestellingen zonder daadwerkelijke leverdatum")
+        plt.xlabel("Leverancier")
+        plt.ylabel("Aantal")
+        st.pyplot(plt.gcf())
 
-        # ** Late Deliveries per Supplier **
-        st.write(f"""
-        Deze grafiek toont het aantal vertraagde leveringen per leverancier voor het jaar {self.selected_year}. 
-        Een vertraging in de levering wordt gedefinieerd als een afwijking van de afgesproken leverdatum.
-        """)
+    def plot_fully_delivered(self):
+        delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
+        if delivered.empty:
+            st.info("Geen volledig geleverde bestellingen gevonden.")
+            return
 
-        # Identifying late deliveries based on AfwijkendeAfleverdatum
-        late_deliveries = self.filtered_df[self.filtered_df['AfwijkendeAfleverdatum'].notna()]
-        late_deliveries_count = late_deliveries.groupby('Naam').size()
-
+        counts = delivered['Naam'].value_counts()
         plt.figure(figsize=(12, 6))
-        sns.barplot(x=late_deliveries_count.index, y=late_deliveries_count.values, color='orange')
-        plt.title(f'Vertraagde Leveringen per Supplier voor {self.selected_year}')
-        plt.xlabel('Leverancier')
-        plt.ylabel('Aantal Vertraagde Leveringen')
+        sns.barplot(x=counts.index, y=counts.values, color='lightgreen')
         plt.xticks(rotation=90)
-        st.pyplot(fig=plt.gcf())
+        plt.title("Volledig Geleverde Bestellingen")
+        plt.xlabel("Leverancier")
+        plt.ylabel("Aantal")
+        st.pyplot(plt.gcf())
 
-        # ** Deliveries per Supplier **
-        st.write(f"""
-        Deze grafiek toont het aantal leveringen per leverancier voor het jaar {self.selected_year}. 
-        Dit helpt bij het identificeren van leveranciers die mogelijk niet genoeg leveren.
-        """)
-
-        deliveries_per_supplier = self.filtered_df.groupby('Naam')['TotalDeliveries'].sum()
+    def plot_delivery_counts(self):
+        grouped = self.filtered_df.groupby('Naam')['DeliveryCount'].sum()
+        if grouped.empty:
+            st.info("Geen leveringen geregistreerd.")
+            return
 
         plt.figure(figsize=(12, 6))
-        sns.barplot(x=deliveries_per_supplier.index, y=deliveries_per_supplier.values, color='lightgreen')
-        plt.title(f'Aantal Leveringen per Leverancier voor {self.selected_year}')
-        plt.xlabel('Leverancier')
-        plt.ylabel('Aantal Leveringen')
+        sns.barplot(x=grouped.index, y=grouped.values, color='orange')
         plt.xticks(rotation=90)
-        st.pyplot(fig=plt.gcf())
+        plt.title("Totaal aantal leveringen per leverancier")
+        plt.xlabel("Leverancier")
+        plt.ylabel("Aantal leveringen")
+        st.pyplot(plt.gcf())
 
-        # ** Supplier Delivery Frequency vs Order Volume **
-        st.write(f"""
-        Deze grafiek toont de verhouding tussen de frequentie van leveringen en het ordervolume per leverancier voor het jaar {self.selected_year}. 
-        Leveranciers met een lage leverfrequentie kunnen mogelijk problemen hebben.
-        """)
+    def plot_performance_over_time(self):
+        df = self.filtered_df.copy()
+        df['YearMonth'] = df['Datum'].dt.to_period('M').astype(str)
+        timeseries = df.groupby(['YearMonth', 'Naam'])['DeliveryCount'].sum().unstack()
+        if timeseries.empty:
+            st.info("Geen tijdsgebonden leveringsdata beschikbaar.")
+            return
 
-        # Delivery frequency vs. order volume (TotalOrders per Supplier)
-        delivery_frequency = self.filtered_df.groupby('Naam').size()
-        order_volume = self.filtered_df.groupby('Naam')['GuLiIOR'].count()  # Number of orders per supplier
-
-        # Merging delivery frequency and order volume
-        delivery_data = pd.DataFrame({
-            'DeliveryFrequency': delivery_frequency,
-            'OrderVolume': order_volume
-        })
-
-        plt.figure(figsize=(12, 6))
-        sns.scatterplot(x='OrderVolume', y='DeliveryFrequency', data=delivery_data, hue='DeliveryFrequency', palette='viridis')
-        plt.title(f'Leverancier Leverfrequentie vs Ordervolume voor {self.selected_year}')
-        plt.xlabel('Ordervolume')
-        plt.ylabel('Leverfrequentie')
-        st.pyplot(fig=plt.gcf())
-
-        # ** Performance Over Time **
-        st.write(f"""
-        Deze grafiek toont de prestaties van de leveranciers over de tijd voor het jaar {self.selected_year}. 
-        Door de prestaties over de tijd te bekijken, kunnen we zien of leveranciers steeds minder goed presteren.
-        """)
-
-        # Group by Year and Month and calculate total deliveries over time for each supplier
-        self.filtered_df['YearMonth'] = self.filtered_df['Datum'].dt.to_period('M')
-        supplier_performance = self.filtered_df.groupby(['YearMonth', 'Naam'])['TotalDeliveries'].sum().unstack()
-
-        supplier_performance.plot(figsize=(12, 6))
-        plt.title(f'Leverancier Prestatie Over Tijd voor {self.selected_year}')
-        plt.xlabel('Maand')
-        plt.ylabel('Aantal Leveringen')
-        st.pyplot(fig=plt.gcf())
+        timeseries.plot(figsize=(12, 6))
+        plt.title("Leverfrequentie per maand")
+        plt.xlabel("Maand")
+        plt.ylabel("Aantal Leveringen")
+        st.pyplot(plt.gcf())

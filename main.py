@@ -150,14 +150,14 @@ print(missing_summary)
 # 1 I will try to hunt down the reason why it still happens sometimes and try to fill them later 
 # 2 I will remove the years 2021 and 2022 from this evaluation to minimize the impact of that since its older data this is fine for now -> maybe when i know the reason for action 1 i will add them back
 
-# # Define years to exclude
-# years_to_exclude = [2021, 2022]
+# Define years to exclude
+years_to_exclude = [2021, 2022]
 
-# # Filter items_without_date
-# items_without_date = items_without_date[~items_without_date['Datum'].dt.year.isin(years_to_exclude)].copy()
+# Filter items_without_date
+items_without_date = items_without_date[~items_without_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
-# # Filter items_with_date
-# items_with_date = items_with_date[~items_with_date['Datum'].dt.year.isin(years_to_exclude)].copy()
+# Filter items_with_date
+items_with_date = items_with_date[~items_with_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
 
 # Now we will look into the supplier details and for now leave the items_without_date until these are fixed
@@ -176,6 +176,8 @@ print(
     f"Items with expected delivery date: {total_items}, without actual delivery date: {missing_delivery_date_count} "
     f"({(missing_delivery_date_count / total_items) * 100:.2f}%)"
 )
+
+print(items_with_date.columns)
 # with pd.option_context('display.max_rows', None, 'display.max_columns', None):
 
 
@@ -183,7 +185,7 @@ print(
 
 
 # Create the UI instance
-ui = UI(df_inkooporderregels_clean)
+ui = UI(items_with_date)
 
 # Select year for analysis
 ui.year_selection()  # Call the year selection method
