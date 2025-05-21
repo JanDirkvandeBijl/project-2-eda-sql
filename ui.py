@@ -51,14 +51,13 @@ class UI:
             self.plot_fully_delivered()
         with tabs[3]:
             self.plot_performance_over_time()
-        
         with tabs[4]:
             self.plot_delivery_delay_categories()
 
     def plot_missing_delivery_date(self):
         df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
         if df.empty:
-            st.info("All orders are delivered or have a delivery date.")
+            st.info("All orders are delivered.")
             return
 
         counts = df['Naam'].value_counts().reset_index()

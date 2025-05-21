@@ -5,7 +5,7 @@ import pandas as pd
 from eda_service import EDAService
 from cleanup import DataFrameCleaner
 from loader import load_all_datasets
-from ui import UI  # Assuming UI is in a file named ui.py
+from ui import UI  
 
 # -----------------------------
 # Loading Datasets
@@ -18,9 +18,11 @@ except Exception:
 # -----------------------------
 # Constants and Configurations
 # -----------------------------
+# This are the columns that I want to keep for the analysis
 relevant_columns_inkoop = ['GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID', 'QuUn', 'OrNu']
 relevant_columns_ontvangst = ['BronregelGuid', 'Datum', 'AantalOntvangen', 'Status_regel', 'Itemcode', 'Naam']
 
+# These are the columns that I want to convert to their valid types
 inkoop_columns_to_convert = {
     'Datum': 'datetime',
     'DatumToegezegd': 'datetime',
@@ -34,8 +36,6 @@ ontvangst_columns_to_convert = {
     'Datum': 'datetime'
 }
 
-years_to_exclude = [2021, 2022]
-
 # -----------------------------
 # Cleaning and Preparation
 # -----------------------------
@@ -47,14 +47,15 @@ cleaner_ontvangst = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregel
 cleaner_ontvangst.apply_dtype_mapping(ontvangst_columns_to_convert)
 df_ontvangstregels_clean = cleaner_ontvangst.get_cleaned_df()[relevant_columns_ontvangst].copy()
 
-print("Number of rows with empty BronRegelGUID:", df_inkooporderregels_clean['BronRegelGUID'].isna().sum())
-
 # -----------------------------
 # Deriving Expected Delivery Dates
 # -----------------------------
+# AfwijkendeAfleverdatum is the mainly used field for this sometimes DatumToegezegd is used so AfwijkendeAfleverdatum has precendence over DatumToegezegd
 df_inkooporderregels_clean['ExpectedDeliveryDate'] = df_inkooporderregels_clean['AfwijkendeAfleverdatum'].combine_first(
     df_inkooporderregels_clean['DatumToegezegd']
 )
+
+# Get rid of the columns that are not needed anymore
 df_inkooporderregels_clean.drop(columns=['AfwijkendeAfleverdatum', 'DatumToegezegd'], inplace=True)
 
 # -----------------------------
@@ -117,8 +118,9 @@ print("\nMissing delivery dates per year:")
 print(missing_summary)
 
 # -----------------------------
-# Exclude Older Years
+# Exclude Older Years -> due to curruption in data
 # -----------------------------
+years_to_exclude = [2021, 2022]
 items_without_date = items_without_date[~items_without_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 items_with_date = items_with_date[~items_with_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
