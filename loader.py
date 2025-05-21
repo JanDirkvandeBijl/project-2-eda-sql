@@ -8,11 +8,11 @@ DATA_DIR = "data"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 datasets = {
-    "Inkooporderregels": ("http://app-wfs-01:5100/F/Inkooporderregels_All.json", "Inkooporderregels_All.json"),
-    "Ontvangstregels": ("http://app-wfs-01:5100/F/Ontvangstregels.json", "Ontvangstregels.json"),
-    "Relaties": ("http://app-wfs-01:5100/F/Relaties.json", "Relaties.json"),
-    "FeedbackLeveranciers": ("http://app-wfs-01:5100/F/FeedbackLeveranciers.json", "FeedbackLeveranciers.json"),
-    "Leveranciers": ("http://app-wfs-01:5100/F/Leveranciers.json", "Leveranciers.json")  # Added Leveranciers dataset
+    "Inkooporderregels": ("http://10.11.10.104:5100/F/Inkooporderregels_All.json", "Inkooporderregels_All.json"),
+    "Ontvangstregels": ("http://10.11.10.104:5100/F/Ontvangstregels.json", "Ontvangstregels.json"),
+    "Relaties": ("http://10.11.10.104:5100/F/Relaties.json", "Relaties.json"),
+    "FeedbackLeveranciers": ("http://10.11.10.104:5100/F/FeedbackLeveranciers.json", "FeedbackLeveranciers.json"),
+    "Leveranciers": ("http://10.11.10.104:5100/F/Leveranciers.json", "Leveranciers.json")  # Added Leveranciers dataset
 }
 
 def download_if_missing(url: str, filename: str, log: bool = False):

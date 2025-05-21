@@ -5,7 +5,7 @@ import pandas as pd
 from ui import UI  # Assuming UI is in a file named `ui.py`
 
 try:
-    df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets()
+    df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets(True)
 except Exception:
     exit(1)
 
