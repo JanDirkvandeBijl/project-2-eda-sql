@@ -150,85 +150,49 @@ print(missing_summary)
 # 1 I will try to hunt down the reason why it still happens sometimes and try to fill them later 
 # 2 I will remove the years 2021 and 2022 from this evaluation to minimize the impact of that since its older data this is fine for now -> maybe when i know the reason for action 1 i will add them back
 
-# Define years to exclude
-years_to_exclude = [2021, 2022]
+# # Define years to exclude
+# years_to_exclude = [2021, 2022]
 
-# Filter items_without_date
-items_without_date = items_without_date[~items_without_date['Datum'].dt.year.isin(years_to_exclude)].copy()
+# # Filter items_without_date
+# items_without_date = items_without_date[~items_without_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
-# Filter items_with_date
-items_with_date = items_with_date[~items_with_date['Datum'].dt.year.isin(years_to_exclude)].copy()
-
-
+# # Filter items_with_date
+# items_with_date = items_with_date[~items_with_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
 
-# # Optionally, run the EDA service (unchanged part)
-# # eda = EDAService(df_inkooporderregels, name="df_inkooporderregels")
-# # eda.run_step(1)
+# Now we will look into the supplier details and for now leave the items_without_date until these are fixed
 
-# # Merge df_inkooporderregels_clean with df_ontvangstregels_clean on 'GuLiIOR' and 'BronregelGuid'
-# merged_df = pd.merge(df_inkooporderregels_clean, df_ontvangstregels_clean, 
-#                      left_on=['GuLiIOR'], right_on=['BronregelGuid'], how='left')
-# print(merged_df[['GuLiIOR', 'BronregelGuid', 'TotaalOntvangen']].head())
-# # Add the total deliveries column to df_inkooporderregels_clean
-# df_inkooporderregels_clean['TotalDeliveries'] = merged_df.groupby('GuLiIOR')['BronregelGuid'].transform('count')
+unique_suppliers = items_with_date['Naam'].unique()
+print(f"Unique suppliers {len(unique_suppliers)}")
+# Result is: Unique suppliers 350
 
-# # Get the most recent delivery date for each GuLiIOR from df_ontvangstregels_clean
-# latest_delivery_date = df_ontvangstregels_clean.groupby('BronregelGuid')['Datum'].max()
-
-# # Merge the most recent delivery date back into df_inkooporderregels_clean
-# df_inkooporderregels_clean['DeliveryDate'] = df_inkooporderregels_clean['GuLiIOR'].map(latest_delivery_date)
-# print(len(df_inkooporderregels_clean))
-
-# # Filter the rows where 'DeliveryDate' is NaT and 'TotalDeliveries' is 0
-# no_deliveries = df_inkooporderregels_clean[(df_inkooporderregels_clean['DeliveryDate'].isna()) & 
-#                                             (df_inkooporderregels_clean['TotalDeliveries'] == 0)]
-
-# # Print the first few rows
-# # print(len(no_deliveries))
-# # print(no_deliveries.head())
+# Add latest delivery date per GuLiIOR (matching on BronregelGuid)
+items_with_date['DeliveryDate'] = items_with_date['GuLiIOR'].map(
+    df_ontvangstregels_clean.groupby('BronregelGuid')['Datum'].max()
+)
+missing_delivery_date_count = items_with_date['DeliveryDate'].isna().sum()
+total_items = len(items_with_date)
+print(
+    f"Items with expected delivery date: {total_items}, without actual delivery date: {missing_delivery_date_count} "
+    f"({(missing_delivery_date_count / total_items) * 100:.2f}%)"
+)
+# with pd.option_context('display.max_rows', None, 'display.max_columns', None):
 
 
 
 
 
-# # Create the UI instance
-# ui = UI(df_inkooporderregels_clean)
+# Create the UI instance
+ui = UI(df_inkooporderregels_clean)
 
-# # Select year for analysis
-# ui.year_selection()  # Call the year selection method
+# Select year for analysis
+ui.year_selection()  # Call the year selection method
 
-# # Select suppliers for analysis
-# ui.supplier_selection()  # Call the supplier selection method
+# Select suppliers for analysis
+ui.supplier_selection()  # Call the supplier selection method
 
-# # Display the analysis and plot based on the selected year and suppliers
-# ui.show_date_analysis()  # Display the analysis and plot based on selected year and suppliers
-
-
+# Display the analysis and plot based on the selected year and suppliers
+ui.show_date_analysis()  # Display the analysis and plot based on selected year and suppliers
 
 
-
-
-# Controleer of er geldige datums zijn
-# if items_without_delivery_date['Datum'].notna().any():
-#     # Vind de index van de rij met de hoogste Datum
-#     idx = items_without_delivery_date['Datum'].idxmax()
-
-#     print(f"Index met hoogste Datum: {idx}")
-#     print(items_without_delivery_date.loc[idx])
-
-#     # Haal de BronRegelGUID uit die rij
-#     bronregel_id = items_without_delivery_date.loc[idx, 'BronRegelGUID']
-#     print(f"BronRegelGUID van die rij: {bronregel_id}")
-
-#     # Zoek de bijbehorende rij(en) in het originele DataFrame
-#     item = df_inkooporderregels[df_inkooporderregels['BronRegelGUID'] == bronregel_id]
-
-#     # Print het volledige item (alle kolommen, alle matches)
-#     print("\nVolledige rij(en) uit df_inkooporderregels met deze BronRegelGUID:")
-#     print(item.to_string(index=False))  # netjes zonder index
-# else:
-#     # Geen geldige datums aanwezig
-#     aantal_leeg = items_without_delivery_date['ExpectedDeliveryDate'].isna().sum()
-#     print(f"Aantal lege ExpectedDeliveryDate: {aantal_leeg}")
 
