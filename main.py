@@ -1,25 +1,27 @@
+# -----------------------------
+# Imports and Initial Setup
+# -----------------------------
 from eda_service import EDAService
 from cleanup import DataFrameCleaner
 from loader import load_all_datasets
 import pandas as pd
 from ui import UI  # Assuming UI is in a file named ui.py
 
-# Load all required datasets
+# -----------------------------
+# Loading Datasets
+# -----------------------------
+# Load all required datasets; exit on failure
 try:
     df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets()
 except Exception:
     exit(1)
 
-# Define relevant columns to retain for analysis
-relevant_columns_inkoop = [
-    'GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID', 'QuUn'
-]
-
-relevant_columns_ontvangst = [
-    'BronregelGuid', 'Datum', 'AantalOntvangen', 'Status_regel', 'Itemcode', 'Naam'
-]
-
-# Define columns to convert to specific dtypes
+# -----------------------------
+# Relevant Columns and Type Mappings
+# -----------------------------
+# Specify relevant columns for analysis and expected data types
+relevant_columns_inkoop = ['GuLiIOR', 'Datum', 'DatumToegezegd', 'AfwijkendeAfleverdatum', 'Naam', 'BronRegelGUID', 'QuUn']
+relevant_columns_ontvangst = ['BronregelGuid', 'Datum', 'AantalOntvangen', 'Status_regel', 'Itemcode', 'Naam']
 inkoop_columns_to_convert = {
     'Datum': 'datetime',
     'DatumToegezegd': 'datetime',
@@ -29,132 +31,134 @@ inkoop_columns_to_convert = {
     'Naam': 'str'
 }
 
-# Clean and prepare df_inkooporderregels
-cleaner = DataFrameCleaner(df_inkooporderregels, name="df_inkooporderregels")
-cleaner.apply_dtype_mapping(inkoop_columns_to_convert)
-df_inkooporderregels_clean = cleaner.get_cleaned_df()[relevant_columns_inkoop].copy()
+# -----------------------------
+# Cleaning and Preparation
+# -----------------------------
+# Clean purchase order lines
+cleaner_inkoop = DataFrameCleaner(df_inkooporderregels, name="df_inkooporderregels")
+cleaner_inkoop.apply_dtype_mapping(inkoop_columns_to_convert)
+df_inkooporderregels_clean = cleaner_inkoop.get_cleaned_df()[relevant_columns_inkoop].copy()
 
-# Clean and prepare df_ontvangstregels
-cleaner2 = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
-df_ontvangstregels_clean = cleaner2.get_cleaned_df()[relevant_columns_ontvangst]
+# Clean delivery receipt lines
+cleaner_ontvangst = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
+df_ontvangstregels_clean = cleaner_ontvangst.get_cleaned_df()[relevant_columns_ontvangst].copy()
 
-# --- Create unified delivery date ---
-
-# 1. DatumToegezegd is the original promised delivery date and should not be changed.
-# 2. AfwijkendeAfleverdatum is the override delivery date and may be updated.
-# 3. ExpectedDeliveryDate is resolved from either of the two.
-# 4. TODO: Handle cases where both are missing.
-
-# ExpectedDeliveryDate is resolved from either AfwijkendeAfleverdatum or DatumToegezegd
+# -----------------------------
+# Deriving Expected Delivery Dates
+# -----------------------------
+# Resolve expected delivery date from override or original date
 df_inkooporderregels_clean['ExpectedDeliveryDate'] = df_inkooporderregels_clean['AfwijkendeAfleverdatum'].combine_first(
     df_inkooporderregels_clean['DatumToegezegd']
 )
-
-# Remove the original date columns
 df_inkooporderregels_clean.drop(columns=['AfwijkendeAfleverdatum', 'DatumToegezegd'], inplace=True)
 
-# --- Identify faulty rows (missing expected delivery date) ---
+# -----------------------------
+# Analysis: Missing Delivery Dates
+# -----------------------------
+# Subset lines without expected delivery date
+items_without_date = df_inkooporderregels_clean[df_inkooporderregels_clean['ExpectedDeliveryDate'].isna()].copy()
 
-# Filter lines without an expected delivery date
-items_without_delivery_date = df_inkooporderregels_clean[
-    df_inkooporderregels_clean['ExpectedDeliveryDate'].isna()
-].copy()
-
-# Count how many ontvangstregels are linked to each BronregelGuid
+# Map number of deliveries per BronregelGuid to GuLiIOR
 delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
+items_without_date['DeliveryCount'] = items_without_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
 
-# Map count of deliveries to GuLiIOR
-items_without_delivery_date['DeliveryCount'] = items_without_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
+# Logging stats
+missing_total = len(items_without_date)
 
-# Logging: how many have no deliveries
-missing_total = len(items_without_delivery_date)
-missing_with_no_delivery = (items_without_delivery_date['DeliveryCount'] == 0).sum()
+print(f"Percentage that doesnt have a delivery date: {(missing_total/len(df_inkooporderregels_clean) * 100)}")
 
-print(
-    "Items without expected delivery date: {}, of which have no deliveries: {} ({:.2f}%)".format(
-        missing_total,
-        missing_with_no_delivery,
-        (missing_with_no_delivery / missing_total) * 100
-    )
-)
+missing_no_delivery = (items_without_date['DeliveryCount'] == 0).sum()
+print(f"Items without expected delivery date: {missing_total}, of which have no deliveries: {missing_no_delivery} ({(missing_no_delivery / missing_total) * 100:.2f}%)")
 
-# --- Additional analysis: full delivery status ---
+# -----------------------------
+# Analysis: Fully Delivered without Expected Date
+# -----------------------------
+# Sum all received quantities per BronregelGuid
+total_received = df_ontvangstregels_clean.groupby('BronregelGuid')['AantalOntvangen'].sum()
 
-# Group ontvangstregels by BronregelGuid and sum AantalOntvangen
-total_received_per_line = df_ontvangstregels_clean.groupby('BronregelGuid')['AantalOntvangen'].sum()
+# Map to items_without_date
+items_without_date['TotalReceived'] = items_without_date['GuLiIOR'].map(total_received).fillna(0).astype(float)
+items_without_date['QuUn'] = items_without_date['QuUn'].fillna(0).astype(float)
 
-# Map total received amount to items_without_delivery_date via GuLiIOR
-items_without_delivery_date['TotalReceived'] = items_without_delivery_date['GuLiIOR'].map(total_received_per_line).fillna(0).astype(float)
+# Flag as fully delivered
+items_without_date['FullyDelivered'] = items_without_date['TotalReceived'] >= items_without_date['QuUn']
 
-# Ensure QuUn is numeric and non-null
-items_without_delivery_date['QuUn'] = items_without_delivery_date['QuUn'].fillna(0).astype(float)
+# Report
+fully_delivered_missing = items_without_date['FullyDelivered'].sum()
+print(f"Items without expected delivery date: {missing_total}, fully delivered: {fully_delivered_missing} ({(fully_delivered_missing / missing_total) * 100:.2f}%)")
 
-# Determine full delivery
-items_without_delivery_date['FullyDelivered'] = items_without_delivery_date['TotalReceived'] >= items_without_delivery_date['QuUn']
+# -----------------------------
+# Analysis: Valid Delivery Dates
+# -----------------------------
+# Subset lines with expected delivery date
+items_with_date = df_inkooporderregels_clean[df_inkooporderregels_clean['ExpectedDeliveryDate'].notna()].copy()
 
-# Logging: how many lines are fully delivered
-fully_delivered_count = items_without_delivery_date['FullyDelivered'].sum()
+# Map delivery counts again (already computed above)
+items_with_date['DeliveryCount'] = items_with_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
 
-print(
-    "Items without expected delivery date: {}, fully delivered: {} ({:.2f}%)".format(
-        missing_total,
-        fully_delivered_count,
-        (fully_delivered_count / missing_total) * 100
-    )
-)
+# Logging stats
+valid_total = len(items_with_date)
+valid_no_delivery = (items_with_date['DeliveryCount'] == 0).sum()
+print(f"Items with expected delivery date: {valid_total}, of which have no deliveries: {valid_no_delivery} ({(valid_no_delivery / valid_total) * 100:.2f}%)")
 
-# Result is: Items without expected delivery date: 3270, of which have no deliveries: 283 (8.65%)
-# Conclusion -> We will need to find out why these dates arent filled to make them work in our vissuals
+# -----------------------------
+# Analysis: Fully Delivered with Expected Date
+# -----------------------------
+# Reuse total_received from above
+items_with_date['TotalReceived'] = items_with_date['GuLiIOR'].map(total_received).fillna(0).astype(float)
+items_with_date['QuUn'] = items_with_date['QuUn'].fillna(0).astype(float)
+
+# Flag as fully delivered
+items_with_date['FullyDelivered'] = items_with_date['TotalReceived'] >= items_with_date['QuUn']
+
+# Report
+fully_delivered_valid = items_with_date['FullyDelivered'].sum()
+print(f"Items with expected delivery date: {valid_total}, fully delivered: {fully_delivered_valid} ({(fully_delivered_valid / valid_total) * 100:.2f}%)")
 
 
+# -----------------------------
+# Missing Delivery Dates by Year
+# -----------------------------
+# Extract year from original order date
+items_without_date['OrderYear'] = items_without_date['Datum'].dt.year
 
-# Subset 3: Correct lines (ExpectedDeliveryDate is filled)
-# Filter only the valid lines with a known expected delivery date
-items_with_delivery_date = df_inkooporderregels_clean[
-    df_inkooporderregels_clean['ExpectedDeliveryDate'].notna()
-].copy()
+# Count and percentage of missing delivery dates per year
+missing_per_year = items_without_date['OrderYear'].value_counts().sort_index()
+missing_perc_per_year = (missing_per_year / missing_total * 100).round(2)
 
-# Count how many ontvangstregels are linked to each BronregelGuid
-delivery_counts = df_ontvangstregels_clean['BronregelGuid'].value_counts()
+# Combine into one DataFrame
+missing_summary = pd.DataFrame({
+    'MissingCount': missing_per_year,
+    'Percentage': missing_perc_per_year.map(lambda x: f"{x:.2f}%")
+})
 
-# Map count of deliveries to GuLiIOR
-items_with_delivery_date['DeliveryCount'] = items_with_delivery_date['GuLiIOR'].map(delivery_counts).fillna(0).astype(int)
+# Print the combined result
+print("\nMissing delivery dates per year:")
+print(missing_summary)
+# Missing delivery dates per year:
+#            MissingCount Percentage
+# OrderYear
+# 2021               2339     71.53%
+# 2022                638     19.51%
+# 2023                122      3.73%
+# 2024                123      3.76%
+# 2025                 48      1.47%
 
-# Logging: how many have 0 deliveries
-valid_total = len(items_with_delivery_date)
-valid_with_no_delivery = (items_with_delivery_date['DeliveryCount'] == 0).sum()
 
-print(
-    "Items with expected delivery date: {}, of which have no deliveries: {} ({:.2f}%)".format(
-        valid_total,
-        valid_with_no_delivery,
-        (valid_with_no_delivery / valid_total) * 100
-    )
-)
+# we can see that this issue is happening mostly in older data
+# Actions
+# 1 I will try to hunt down the reason why it still happens sometimes and try to fill them later 
+# 2 I will remove the years 2021 and 2022 from this evaluation to minimize the impact of that since its older data this is fine for now -> maybe when i know the reason for action 1 i will add them back
 
-# --- Additional analysis: full delivery status ---
-# Group ontvangstregels by BronregelGuid and sum AantalOntvangen
-total_received_per_line = df_ontvangstregels_clean.groupby('BronregelGuid')['AantalOntvangen'].sum()
+# Define years to exclude
+years_to_exclude = [2021, 2022]
 
-# Map total received amount to items_with_delivery_date via GuLiIOR
-items_with_delivery_date['TotalReceived'] = items_with_delivery_date['GuLiIOR'].map(total_received_per_line).fillna(0).astype(float)
+# Filter items_without_date
+items_without_date = items_without_date[~items_without_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
-# Ensure QuUn is numeric and non-null
-items_with_delivery_date['QuUn'] = items_with_delivery_date['QuUn'].fillna(0).astype(float)
+# Filter items_with_date
+items_with_date = items_with_date[~items_with_date['Datum'].dt.year.isin(years_to_exclude)].copy()
 
-# Determine full delivery
-items_with_delivery_date['FullyDelivered'] = items_with_delivery_date['TotalReceived'] >= items_with_delivery_date['QuUn']
-
-# Logging: how many lines are fully delivered
-fully_delivered_count = items_with_delivery_date['FullyDelivered'].sum()
-
-print(
-    "Items with expected delivery date: {}, fully delivered: {} ({:.2f}%)".format(
-        valid_total,
-        fully_delivered_count,
-        (fully_delivered_count / valid_total) * 100
-    )
-)
 
 
 
