@@ -9,18 +9,26 @@ st.set_page_config(layout="wide")
 class UI:
     def __init__(self, df):
         self.original_df = df.copy()
-        self.selected_year = None
-        self.selected_suppliers = None
+        self.selected_years = []
+        self.selected_suppliers = []
         self.filtered_df = df.copy()
 
     def year_selection(self):
-        years = sorted(self.original_df['Datum'].dt.year.unique())
-        self.selected_year = st.selectbox('Select a year for analysis:', years)
-        self.filtered_df = self.original_df[self.original_df['Datum'].dt.year == self.selected_year]
+        all_years = sorted(self.original_df['Datum'].dt.year.unique())
+        self.selected_years = st.multiselect(
+            'Select one or more years (leave empty to include all):',
+            options=all_years,
+            default=[]
+        )
+
+        if self.selected_years:
+            self.filtered_df = self.original_df[self.original_df['Datum'].dt.year.isin(self.selected_years)]
+        else:
+            self.filtered_df = self.original_df.copy()
 
     def supplier_selection(self):
         if self.filtered_df.empty:
-            st.warning("No data available for the selected year.")
+            st.warning("No data available.")
             return
 
         suppliers = sorted(self.filtered_df['Naam'].dropna().unique())
@@ -34,9 +42,9 @@ class UI:
             st.warning("No data available after filtering.")
             return
 
-        st.subheader(f"Delivery Analysis for year {self.selected_year}")
+        year_label = ", ".join(map(str, self.selected_years)) if self.selected_years else "all years"
+        st.subheader(f"Delivery Analysis for {year_label}")
 
-        # General summary metrics
         total_orders = self.filtered_df['OrNu'].nunique() if 'OrNu' in self.filtered_df.columns else 0
         total_order_lines = len(self.filtered_df)
         total_suppliers = self.filtered_df['Naam'].nunique()
@@ -64,11 +72,11 @@ class UI:
 
         with tab_groups[2]:
             self.plot_performance_over_time()
-            self.plot_delivery_delay_categories()
 
     def plot_order_delivery_summary(self):
-        df = self.filtered_df.copy()
+        st.info("Toont per leverancier hoeveel volledige orders te vroeg, op tijd of te laat zijn geleverd. Een order bestaat uit meerdere regels.")
 
+        df = self.filtered_df.copy()
         if 'OrNu' not in df.columns:
             st.warning("Order number (OrNu) not found in data.")
             return
@@ -107,6 +115,8 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_delivery_counts(self):
+        st.info("Toont het totaal aantal levermomenten per leverancier, gemeten op regelniveau.")
+
         grouped = self.filtered_df.groupby('Naam')['DeliveryCount'].sum().reset_index()
         if grouped.empty:
             st.info("No deliveries registered.")
@@ -122,6 +132,8 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_missing_delivery_date(self):
+        st.info("Geeft per leverancier aan hoeveel orderregels nog geen leverdatum hebben.")
+
         df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
         if df.empty:
             st.info("All order lines are delivered.")
@@ -140,6 +152,8 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_fully_delivered(self):
+        st.info("Laat per leverancier het aantal orderregels zien die volledig geleverd zijn.")
+
         delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
         if delivered.empty:
             st.info("No fully delivered order lines found.")
@@ -157,6 +171,8 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_performance_over_time(self):
+        st.info("Visualiseert de maandelijkse frequentie van leveringen per leverancier.")
+
         df = self.filtered_df.copy()
         df['YearMonth'] = df['Datum'].dt.to_period('M').astype(str)
         timeseries = df.groupby(['YearMonth', 'Naam'])['DeliveryCount'].sum().reset_index()
@@ -169,42 +185,4 @@ class UI:
                       hover_data=['Naam', 'DeliveryCount'],
                       markers=True)
         fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
-
-    def plot_delivery_delay_categories(self):
-        df = self.filtered_df.copy()
-        df['DeliveryDate'] = pd.to_datetime(df['DeliveryDate'], errors='coerce')
-        df['ExpectedDeliveryDate'] = pd.to_datetime(df['ExpectedDeliveryDate'], errors='coerce')
-        df = df.dropna(subset=['DeliveryDate', 'ExpectedDeliveryDate'])
-        if df.empty:
-            st.info("No order lines with both delivery and expected date.")
-            return
-
-        df['DeliveryDelay'] = (df['DeliveryDate'] - df['ExpectedDeliveryDate']).dt.days
-
-        def categorize(row):
-            if row < 0:
-                return "Early"
-            elif row == 0:
-                return "On Time"
-            else:
-                return "Late"
-
-        df['Category'] = df['DeliveryDelay'].apply(categorize)
-
-        summary = df.groupby(['Naam', 'Category']).size().reset_index(name='Count')
-        pivot_df = summary.pivot(index='Naam', columns='Category', values='Count').fillna(0)
-
-        if not pivot_df.empty:
-            pivot_df['Total'] = pivot_df.sum(axis=1)
-            pivot_df = pivot_df.sort_values(by='Total', ascending=False)
-            pivot_df = pivot_df.drop(columns='Total')
-
-        pivot_df = pivot_df.reset_index()
-
-        fig = px.bar(pivot_df, x='Naam', y=['Early', 'On Time', 'Late'],
-                     title="Delivery Timeliness per Supplier (Order Line Level)",
-                     labels={'value': 'Number of Order Lines', 'variable': 'Category'},
-                     hover_name='Naam')
-        fig.update_layout(barmode='stack', xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
