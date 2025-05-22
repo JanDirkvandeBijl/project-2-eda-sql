@@ -7,12 +7,13 @@ import plotly.express as px
 st.set_page_config(layout="wide")
 
 class UI:
-    def __init__(self, df):
+    def __init__(self, df, chi_data=None):
         self.original_df = df.copy()
         self.selected_years = []
         self.selected_suppliers = []
         self.filtered_df = df.copy()
         self.top_percent = 10  # default top 10%
+        self.chi_data = chi_data or {}
     # st.write("Totaal orderregels:", len(self.filtered_df))
     # st.write("Totaal DeliveryCount-som:", self.filtered_df['DeliveryCount'].sum())
     # st.write("Totaal zonder DeliveryDate:", self.filtered_df['DeliveryDate'].isna().sum())
@@ -78,19 +79,26 @@ class UI:
         tab_groups = st.tabs([
             "Per Order",
             "Per Order Line",
-            "Timeliness & Trends"
+            "Timeliness & Trends",
+            "Responsibility"
         ])
 
         with tab_groups[0]:
             self.plot_order_delivery_summary()
-
         with tab_groups[1]:
             self.plot_delivery_counts()
             self.plot_missing_delivery_date()
             self.plot_fully_delivered()
-
         with tab_groups[2]:
             self.plot_performance_over_time()
+        with tab_groups[3]:
+            self.show_orderlevel_chi_square(
+                observed=self.chi_data.get("observed"),
+                expected=self.chi_data.get("expected"),
+                chi2_stat=self.chi_data.get("chi2_stat"),
+                p_value=self.chi_data.get("p_value"),
+                cramers_v=self.chi_data.get("cramers_v")
+            )
 
     def plot_order_delivery_summary(self):
         st.info("Toont per leverancier hoeveel volledige orders te vroeg, op tijd of te laat zijn geleverd. Een order bestaat uit meerdere regels.")
@@ -229,3 +237,42 @@ class UI:
                       markers=True)
         fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
+    def show_orderlevel_chi_square(self, observed, expected, chi2_stat, p_value, cramers_v):
+        st.info("Toont de verdeling van orderstatussen per verantwoordelijke (top 5).")
+        st.caption("Toetst of de orderstatus (zoals 'Geleverd' of 'Deellevering') afhankelijk is van wie de order heeft aangemaakt.")
+
+        if observed is None or expected is None:
+            st.warning("Geen data beschikbaar voor chi-square analyse.")
+            return
+
+        # Tabel tonen
+        st.markdown("#### Werkelijke frequenties")
+        st.dataframe(observed, use_container_width=True)
+
+        # Statistieken tonen
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Chi²", f"{chi2_stat:.2f}")
+        col2.metric("p-waarde", f"{p_value:.4f}")
+        col3.metric("Cramér's V", f"{cramers_v:.3f}")
+
+        if p_value < 0.05:
+            st.success("Er is een statistisch significant verband (p < 0.05).")
+        else:
+            st.info("Geen statistisch significant verband (p ≥ 0.05).")
+
+        # Heatmap werkelijke waarden
+        fig1, ax1 = plt.subplots(figsize=(5, 3))
+        sns.heatmap(observed, annot=True, fmt="d", cmap="Greens", ax=ax1)
+        ax1.set_title("Werkelijke frequenties per verantwoordelijke")
+        st.pyplot(fig1, use_container_width=True)
+
+        # Verwachte waarden
+        expected_df = pd.DataFrame(expected, index=observed.index, columns=observed.columns)
+        st.markdown("#### Verwachte frequenties (als er geen verband is)")
+        st.dataframe(expected_df.style.format("{:.1f}"), use_container_width=True)
+
+        fig2, ax2 = plt.subplots(figsize=(5, 3))
+        sns.heatmap(expected_df, annot=True, fmt=".1f", cmap="YlOrBr", ax=ax2)
+        ax2.set_title("Verwachte frequenties onder H₀")
+        st.pyplot(fig2, use_container_width=True)
+
