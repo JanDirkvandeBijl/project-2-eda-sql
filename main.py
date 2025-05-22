@@ -14,7 +14,23 @@ try:
     df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets()
 except Exception:
     exit(1)
+    
+# print(df_inkooporderregels.columns)
 
+# totaal = len(df_inkooporderregels)
+# uniek = df_inkooporderregels['ItCd'].nunique(dropna=True)
+# leeg = df_inkooporderregels['ItCd'].isna().sum()
+# print(f"{'ItCd'}:")
+# print(f"  Unieke waarden: {uniek}")
+# print(f"  Lege (NaN) waarden: {leeg}")
+# print(f"  Gevulde waarden: {totaal - leeg}\n")
+
+# item_counts = df_inkooporderregels['ItCd'].value_counts()
+# # Filter op alleen items die meer dan 5 keer voorkomen
+# items_meer_dan_5 = item_counts[item_counts > 5]
+
+# print(f"Aantal unieke ItCd's die meer dan 5 keer voorkomen: {len(items_meer_dan_5)}")
+# print(items_meer_dan_5)
 # -----------------------------
 # Constants and Configurations
 # -----------------------------
@@ -46,6 +62,38 @@ df_inkooporderregels_clean = cleaner_inkoop.get_cleaned_df()[relevant_columns_in
 cleaner_ontvangst = DataFrameCleaner(df_ontvangstregels, name="df_ontvangstregels")
 cleaner_ontvangst.apply_dtype_mapping(ontvangst_columns_to_convert)
 df_ontvangstregels_clean = cleaner_ontvangst.get_cleaned_df()[relevant_columns_ontvangst].copy()
+
+
+
+all_orders = df_inkooporderregels_clean.groupby("OrNu")
+all_articles = df_inkooporderregels_clean.groupby("ItCd")
+# We hebben 13741 unieke orders
+
+# Gemiddelde aantal items per order
+# 
+
+# Per leverancier
+# Aantal leveringen
+# aantal leveringen te vroeg, op tijd en te laat, niet geleverd
+# Performance over time adhv degene hier net boven
+
+
+
+# Per medewerker (later niet in presentatie)
+# Aantal orders per maand
+# Order waarde per maand
+
+
+
+# TODO: Kijken of datum toegezegd nu wel altijd gevuld is maar misschien onder een ander item
+
+
+all_orders_list = list(all_orders)
+print(len(all_orders_list))
+# Eerste groep: tuple van (OrNu-waarde, DataFrame)
+first_order_id, first_order_df = all_orders_list[0]
+print(f"Ordernummer: {first_order_id}")
+print(first_order_df)
 
 # -----------------------------
 # Deriving Expected Delivery Dates
@@ -155,7 +203,7 @@ print(items_with_date.info())
 # -----------------------------
 # Interactive UI
 # -----------------------------
-ui = UI(items_with_date)
-ui.year_selection()
-ui.supplier_selection()
-ui.show_date_analysis()
+# ui = UI(items_with_date)
+# ui.year_selection()
+# ui.supplier_selection()
+# ui.show_date_analysis()
