@@ -12,7 +12,11 @@ class UI:
         self.selected_years = []
         self.selected_suppliers = []
         self.filtered_df = df.copy()
-
+        self.top_percent = 10  # default top 10%
+    # st.write("Totaal orderregels:", len(self.filtered_df))
+    # st.write("Totaal DeliveryCount-som:", self.filtered_df['DeliveryCount'].sum())
+    # st.write("Totaal zonder DeliveryDate:", self.filtered_df['DeliveryDate'].isna().sum())
+    # st.write("Totaal FullyDelivered == True:", (self.filtered_df['FullyDelivered'] == True).sum())
     def year_selection(self):
         all_years = sorted(self.original_df['Datum'].dt.year.unique())
         self.selected_years = st.multiselect(
@@ -34,8 +38,23 @@ class UI:
         suppliers = sorted(self.filtered_df['Naam'].dropna().unique())
         self.selected_suppliers = st.multiselect('Select suppliers:', suppliers)
 
-        if self.selected_suppliers:
+        use_percentage = len(self.selected_suppliers) == 0
+
+        if use_percentage:
+            with st.expander("Advanced filter (top % of suppliers)", expanded=False):
+                self.top_percent = st.slider(
+                    label="Top % leveranciers (alleen actief als geen leverancier handmatig is gekozen):",
+                    min_value=1,
+                    max_value=100,
+                    value=10,
+                    format="%d%%",
+                    label_visibility="collapsed"
+                )
+            st.caption(f"Geen leverancier geselecteerd. Filter toont top {self.top_percent}% leveranciers gesorteerd op relevantie.")
+        else:
             self.filtered_df = self.filtered_df[self.filtered_df['Naam'].isin(self.selected_suppliers)]
+            self.top_percent = None
+            st.caption(f"{len(self.selected_suppliers)} leverancier(s) geselecteerd. Top-% filter is gedeactiveerd.")
 
     def show_date_analysis(self):
         if self.filtered_df.empty:
@@ -75,6 +94,7 @@ class UI:
 
     def plot_order_delivery_summary(self):
         st.info("Toont per leverancier hoeveel volledige orders te vroeg, op tijd of te laat zijn geleverd. Een order bestaat uit meerdere regels.")
+        st.caption("More on-time and early deliveries is better.")
 
         df = self.filtered_df.copy()
         if 'OrNu' not in df.columns:
@@ -95,10 +115,12 @@ class UI:
 
         summary = grouped.groupby(['Naam', 'Category']).size().reset_index(name='Count')
         pivot_df = summary.pivot(index='Naam', columns='Category', values='Count').fillna(0)
-
         if not pivot_df.empty:
             pivot_df['Total'] = pivot_df.sum(axis=1)
             pivot_df = pivot_df.sort_values(by='Total', ascending=False)
+            if self.top_percent is not None:
+                top_x = max(1, int(len(pivot_df) * self.top_percent / 100))
+                pivot_df = pivot_df.head(top_x)
             pivot_df = pivot_df.drop(columns='Total')
 
         pivot_df = pivot_df.reset_index()
@@ -116,6 +138,7 @@ class UI:
 
     def plot_delivery_counts(self):
         st.info("Toont het totaal aantal levermomenten per leverancier, gemeten op regelniveau.")
+        st.caption("More deliveries is better.")
 
         grouped = self.filtered_df.groupby('Naam')['DeliveryCount'].sum().reset_index()
         if grouped.empty:
@@ -123,6 +146,9 @@ class UI:
             return
 
         grouped = grouped.sort_values(by='DeliveryCount', ascending=False)
+        if self.top_percent is not None:
+            top_x = max(1, int(len(grouped) * self.top_percent / 100))
+            grouped = grouped.head(top_x)
 
         fig = px.bar(grouped, x='Naam', y='DeliveryCount',
                      title="Total Deliveries per Supplier (Order Line Level)",
@@ -133,6 +159,7 @@ class UI:
 
     def plot_missing_delivery_date(self):
         st.info("Geeft per leverancier aan hoeveel orderregels nog geen leverdatum hebben.")
+        st.caption("Lower is better.")
 
         df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
         if df.empty:
@@ -142,6 +169,9 @@ class UI:
         counts = df['Naam'].value_counts().reset_index()
         counts.columns = ['Supplier', 'Count']
         counts = counts.sort_values(by='Count', ascending=False)
+        if self.top_percent is not None:
+            top_x = max(1, int(len(counts) * self.top_percent / 100))
+            counts = counts.head(top_x)
 
         fig = px.bar(counts, x='Supplier', y='Count',
                      title="Order Lines without Actual Delivery Date",
@@ -153,6 +183,7 @@ class UI:
 
     def plot_fully_delivered(self):
         st.info("Laat per leverancier het aantal orderregels zien die volledig geleverd zijn.")
+        st.caption("More is better.")
 
         delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
         if delivered.empty:
@@ -162,6 +193,9 @@ class UI:
         counts = delivered['Naam'].value_counts().reset_index()
         counts.columns = ['Supplier', 'Count']
         counts = counts.sort_values(by='Count', ascending=False)
+        if self.top_percent is not None:
+            top_x = max(1, int(len(counts) * self.top_percent / 100))
+            counts = counts.head(top_x)
 
         fig = px.bar(counts, x='Supplier', y='Count',
                      title="Fully Delivered Order Lines",
@@ -172,6 +206,7 @@ class UI:
 
     def plot_performance_over_time(self):
         st.info("Visualiseert de maandelijkse frequentie van leveringen per leverancier.")
+        st.caption("More deliveries per month is better.")
 
         df = self.filtered_df.copy()
         df['YearMonth'] = df['Datum'].dt.to_period('M').astype(str)
@@ -180,7 +215,15 @@ class UI:
             st.info("No time-based delivery data available.")
             return
 
-        fig = px.line(timeseries, x='YearMonth', y='DeliveryCount', color='Naam',
+        supplier_totals = timeseries.groupby('Naam')['DeliveryCount'].sum()
+        if self.top_percent is not None:
+            top_x = max(1, int(len(supplier_totals) * self.top_percent / 100))
+            top_suppliers = supplier_totals.sort_values(ascending=False).head(top_x).index
+            filtered_timeseries = timeseries[timeseries['Naam'].isin(top_suppliers)]
+        else:
+            filtered_timeseries = timeseries
+
+        fig = px.line(filtered_timeseries, x='YearMonth', y='DeliveryCount', color='Naam',
                       title="Monthly Delivery Frequency",
                       hover_data=['Naam', 'DeliveryCount'],
                       markers=True)

@@ -135,6 +135,9 @@ mask = df_inkooporderregels_clean['DeliveryDate'].notna() & df_inkooporderregels
 df_inkooporderregels_clean.loc[mask, 'DeliveryDelay'] = (
     df_inkooporderregels_clean.loc[mask, 'DeliveryDate'] - df_inkooporderregels_clean.loc[mask, 'ExpectedDeliveryDate']
 ).dt.days
+
+
+
 # -----------------------------
 # Optional: Hook up to UI
 # -----------------------------
