@@ -82,6 +82,7 @@ class UI:
         with tab_groups[0]:
             self.plot_order_delivery_summary()
         with tab_groups[1]:
+            self.plot_orderline_delivery_summary()
             self.plot_delivery_counts()
             self.plot_missing_delivery_date()
             self.plot_fully_delivered()
@@ -133,6 +134,46 @@ class UI:
         )
         fig.update_layout(barmode='stack', xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
+    def plot_orderline_delivery_summary(self):
+        st.info("Toont per leverancier hoeveel orderregels te vroeg, op tijd of te laat zijn geleverd.")
+        st.caption("More on-time and early deliveries is better.")
+
+        df = self.filtered_df.copy()
+        df = df.dropna(subset=['ExpectedDeliveryDate', 'DeliveryDate'])
+
+        if df.empty:
+            st.warning("Geen bruikbare data voor analyse.")
+            return
+
+        df['DeliveryDelay'] = (df['DeliveryDate'] - df['ExpectedDeliveryDate']).dt.days
+        df['Category'] = df['DeliveryDelay'].apply(
+            lambda x: 'Early' if x < 0 else 'On Time' if x == 0 else 'Late'
+        )
+
+        summary = df.groupby(['Naam', 'Category']).size().reset_index(name='Count')
+        pivot_df = summary.pivot(index='Naam', columns='Category', values='Count').fillna(0)
+
+        if not pivot_df.empty:
+            pivot_df['Total'] = pivot_df.sum(axis=1)
+            pivot_df = pivot_df.sort_values(by='Total', ascending=False)
+            if self.top_percent is not None:
+                top_x = max(1, int(len(pivot_df) * self.top_percent / 100))
+                pivot_df = pivot_df.head(top_x)
+            pivot_df = pivot_df.drop(columns='Total')
+
+        pivot_df = pivot_df.reset_index()
+
+        fig = px.bar(
+            pivot_df,
+            x='Naam',
+            y=['Early', 'On Time', 'Late'],
+            title="Order Line-level Delivery Timeliness per Supplier",
+            labels={'value': 'Number of Order Lines', 'variable': 'Category'},
+            hover_name='Naam'
+        )
+        fig.update_layout(barmode='stack', xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+
 
     def plot_delivery_counts(self):
         st.info("Toont het totaal aantal levermomenten per leverancier, gemeten op regelniveau.")

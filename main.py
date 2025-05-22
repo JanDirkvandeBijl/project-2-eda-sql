@@ -12,7 +12,7 @@ from scipy.stats import chi2_contingency
 # Load Datasets
 # -----------------------------
 try:
-    df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets()
+    df_inkooporderregels, df_ontvangstregels, df_relaties, df_feedback, df_suppliers = load_all_datasets(True)
 except Exception:
     exit(1)
 
@@ -136,7 +136,6 @@ mask = df_inkooporderregels_clean['DeliveryDate'].notna() & df_inkooporderregels
 df_inkooporderregels_clean.loc[mask, 'DeliveryDelay'] = (
     df_inkooporderregels_clean.loc[mask, 'DeliveryDate'] - df_inkooporderregels_clean.loc[mask, 'ExpectedDeliveryDate']
 ).dt.days
-
 
 
 # -----------------------------
