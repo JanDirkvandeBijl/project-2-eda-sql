@@ -34,57 +34,76 @@ class UI:
             st.warning("No data available after filtering.")
             return
 
-        st.subheader(f"Analysis for year {self.selected_year}")
-        tabs = st.tabs([
-            "Number of Deliveries",
-            "No Delivery Date",
-            "Fully Delivered",
-            "Delivery Performance Over Time",
-            "Delivery Delay by Supplier"
+        st.subheader(f"Delivery Analysis for year {self.selected_year}")
+
+        # General summary metrics
+        total_orders = self.filtered_df['OrNu'].nunique() if 'OrNu' in self.filtered_df.columns else 0
+        total_order_lines = len(self.filtered_df)
+        total_suppliers = self.filtered_df['Naam'].nunique()
+        fully_delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True].shape[0]
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Orders", total_orders)
+        col2.metric("Total Order Lines", total_order_lines)
+        col3.metric("Total Suppliers", total_suppliers)
+        col4.metric("Fully Delivered Lines", fully_delivered)
+
+        tab_groups = st.tabs([
+            "Per Order",
+            "Per Order Line",
+            "Timeliness & Trends"
         ])
 
-        with tabs[0]:
+        with tab_groups[0]:
+            self.plot_order_delivery_summary()
+
+        with tab_groups[1]:
             self.plot_delivery_counts()
-        with tabs[1]:
             self.plot_missing_delivery_date()
-        with tabs[2]:
             self.plot_fully_delivered()
-        with tabs[3]:
+
+        with tab_groups[2]:
             self.plot_performance_over_time()
-        with tabs[4]:
             self.plot_delivery_delay_categories()
 
-    def plot_missing_delivery_date(self):
-        df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
-        if df.empty:
-            st.info("All orders are delivered.")
+    def plot_order_delivery_summary(self):
+        df = self.filtered_df.copy()
+
+        if 'OrNu' not in df.columns:
+            st.warning("Order number (OrNu) not found in data.")
             return
 
-        counts = df['Naam'].value_counts().reset_index()
-        counts.columns = ['Supplier', 'Count']
+        grouped = df.groupby('OrNu').agg({
+            'ExpectedDeliveryDate': 'max',
+            'DeliveryDate': 'max',
+            'FullyDelivered': 'all',
+            'Naam': 'first'
+        }).reset_index()
 
-        fig = px.bar(counts, x='Supplier', y='Count',
-                     title="Orders without actual delivery date",
-                     hover_data=['Supplier', 'Count'],
-                     labels={'Count': 'Number of Orders'},
-                     height=400)
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+        grouped['DeliveryDelay'] = (grouped['DeliveryDate'] - grouped['ExpectedDeliveryDate']).dt.days
+        grouped['Category'] = grouped['DeliveryDelay'].apply(
+            lambda x: 'Early' if x < 0 else 'On Time' if x == 0 else 'Late'
+        )
 
-    def plot_fully_delivered(self):
-        delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
-        if delivered.empty:
-            st.info("No fully delivered orders found.")
-            return
+        summary = grouped.groupby(['Naam', 'Category']).size().reset_index(name='Count')
+        pivot_df = summary.pivot(index='Naam', columns='Category', values='Count').fillna(0)
 
-        counts = delivered['Naam'].value_counts().reset_index()
-        counts.columns = ['Supplier', 'Count']
+        if not pivot_df.empty:
+            pivot_df['Total'] = pivot_df.sum(axis=1)
+            pivot_df = pivot_df.sort_values(by='Total', ascending=False)
+            pivot_df = pivot_df.drop(columns='Total')
 
-        fig = px.bar(counts, x='Supplier', y='Count',
-                     title="Fully Delivered Orders",
-                     hover_data=['Supplier', 'Count'],
-                     color_discrete_sequence=['lightgreen'])
-        fig.update_layout(xaxis_tickangle=-45)
+        pivot_df = pivot_df.reset_index()
+
+        fig = px.bar(
+            pivot_df,
+            x='Naam',
+            y=['Early', 'On Time', 'Late'],
+            title="Order-level Delivery Timeliness per Supplier",
+            labels={'value': 'Number of Orders', 'variable': 'Category'},
+            hover_name='Naam'
+        )
+        fig.update_layout(barmode='stack', xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_delivery_counts(self):
@@ -93,10 +112,47 @@ class UI:
             st.info("No deliveries registered.")
             return
 
+        grouped = grouped.sort_values(by='DeliveryCount', ascending=False)
+
         fig = px.bar(grouped, x='Naam', y='DeliveryCount',
-                     title="Total Deliveries per Supplier",
+                     title="Total Deliveries per Supplier (Order Line Level)",
                      hover_data=['Naam', 'DeliveryCount'],
                      color_discrete_sequence=['orange'])
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+
+    def plot_missing_delivery_date(self):
+        df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
+        if df.empty:
+            st.info("All order lines are delivered.")
+            return
+
+        counts = df['Naam'].value_counts().reset_index()
+        counts.columns = ['Supplier', 'Count']
+        counts = counts.sort_values(by='Count', ascending=False)
+
+        fig = px.bar(counts, x='Supplier', y='Count',
+                     title="Order Lines without Actual Delivery Date",
+                     hover_data=['Supplier', 'Count'],
+                     labels={'Count': 'Number of Order Lines'},
+                     height=400)
+        fig.update_layout(xaxis_tickangle=-45)
+        st.plotly_chart(fig, use_container_width=True)
+
+    def plot_fully_delivered(self):
+        delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
+        if delivered.empty:
+            st.info("No fully delivered order lines found.")
+            return
+
+        counts = delivered['Naam'].value_counts().reset_index()
+        counts.columns = ['Supplier', 'Count']
+        counts = counts.sort_values(by='Count', ascending=False)
+
+        fig = px.bar(counts, x='Supplier', y='Count',
+                     title="Fully Delivered Order Lines",
+                     hover_data=['Supplier', 'Count'],
+                     color_discrete_sequence=['lightgreen'])
         fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
@@ -117,21 +173,15 @@ class UI:
 
     def plot_delivery_delay_categories(self):
         df = self.filtered_df.copy()
-
-        # Ensure datetime conversion
         df['DeliveryDate'] = pd.to_datetime(df['DeliveryDate'], errors='coerce')
         df['ExpectedDeliveryDate'] = pd.to_datetime(df['ExpectedDeliveryDate'], errors='coerce')
-
-        # Filter valid date pairs
         df = df.dropna(subset=['DeliveryDate', 'ExpectedDeliveryDate'])
         if df.empty:
-            st.info("No orders with both delivery and expected date.")
+            st.info("No order lines with both delivery and expected date.")
             return
 
-        # Calculate delay
         df['DeliveryDelay'] = (df['DeliveryDate'] - df['ExpectedDeliveryDate']).dt.days
 
-        # Categorize delay
         def categorize(row):
             if row < 0:
                 return "Early"
@@ -142,23 +192,19 @@ class UI:
 
         df['Category'] = df['DeliveryDelay'].apply(categorize)
 
-        # Group by supplier and category
         summary = df.groupby(['Naam', 'Category']).size().reset_index(name='Count')
-
-        # Pivot to wide format
         pivot_df = summary.pivot(index='Naam', columns='Category', values='Count').fillna(0)
 
-        # Ensure column order
-        pivot_df = pivot_df[['Early', 'On Time', 'Late']] if all(c in pivot_df.columns for c in ['Early', 'On Time', 'Late']) else pivot_df
+        if not pivot_df.empty:
+            pivot_df['Total'] = pivot_df.sum(axis=1)
+            pivot_df = pivot_df.sort_values(by='Total', ascending=False)
+            pivot_df = pivot_df.drop(columns='Total')
 
-        # Reset index for plotting
         pivot_df = pivot_df.reset_index()
 
-        # Stacked bar plot
         fig = px.bar(pivot_df, x='Naam', y=['Early', 'On Time', 'Late'],
-                        title="Delivery Timeliness per Supplier (Early / On Time / Late)",
-                        labels={'value': 'Number of Orders', 'variable': 'Category'},
-                        hover_name='Naam')
-
+                     title="Delivery Timeliness per Supplier (Order Line Level)",
+                     labels={'value': 'Number of Order Lines', 'variable': 'Category'},
+                     hover_name='Naam')
         fig.update_layout(barmode='stack', xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
