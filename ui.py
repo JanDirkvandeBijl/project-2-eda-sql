@@ -238,18 +238,18 @@ class UI:
         fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
     def show_orderlevel_chi_square(self, observed, expected, chi2_stat, p_value, cramers_v):
-        st.info("Toont de verdeling van orderstatussen per verantwoordelijke (top 5).")
-        st.caption("Toetst of de orderstatus (zoals 'Geleverd' of 'Deellevering') afhankelijk is van wie de order heeft aangemaakt.")
+        st.info("Toont de relatieve verdeling van orderstatussen per verantwoordelijke (top 5).")
+        st.caption("De chi-square test toetst of deze verdeling significant afwijkt van toeval.")
 
         if observed is None or expected is None:
             st.warning("Geen data beschikbaar voor chi-square analyse.")
             return
 
-        # Tabel tonen
+        # Tabel met werkelijke frequenties
         st.markdown("#### Werkelijke frequenties")
         st.dataframe(observed, use_container_width=True)
 
-        # Statistieken tonen
+        # Statistieken
         col1, col2, col3 = st.columns(3)
         col1.metric("Chi²", f"{chi2_stat:.2f}")
         col2.metric("p-waarde", f"{p_value:.4f}")
@@ -260,19 +260,28 @@ class UI:
         else:
             st.info("Geen statistisch significant verband (p ≥ 0.05).")
 
-        # Heatmap werkelijke waarden
-        fig1, ax1 = plt.subplots(figsize=(5, 3))
-        sns.heatmap(observed, annot=True, fmt="d", cmap="Greens", ax=ax1)
-        ax1.set_title("Werkelijke frequenties per verantwoordelijke")
-        st.pyplot(fig1, use_container_width=True)
+        # Percentage-stacked bar chart
+        relative = observed.div(observed.sum(axis=1), axis=0) * 100
+        df_plot = relative.reset_index().melt(
+            id_vars=relative.index.name or "VerantwoordelijkeTop5",
+            var_name='StatusOrder',
+            value_name='Percentage'
+        )
 
-        # Verwachte waarden
-        expected_df = pd.DataFrame(expected, index=observed.index, columns=observed.columns)
-        st.markdown("#### Verwachte frequenties (als er geen verband is)")
-        st.dataframe(expected_df.style.format("{:.1f}"), use_container_width=True)
+        fig = px.bar(
+            df_plot,
+            x='VerantwoordelijkeTop5',
+            y='Percentage',
+            color='StatusOrder',
+            title="Relatieve verdeling van orderstatussen per verantwoordelijke",
+            labels={'Percentage': '% van orders', 'VerantwoordelijkeTop5': 'Verantwoordelijke'}
+        )
+        fig.update_layout(
+            barmode='stack',
+            yaxis=dict(title="% van orders", ticksuffix='%'),
+            xaxis_tickangle=-45,
+            height=400
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        fig2, ax2 = plt.subplots(figsize=(5, 3))
-        sns.heatmap(expected_df, annot=True, fmt=".1f", cmap="YlOrBr", ax=ax2)
-        ax2.set_title("Verwachte frequenties onder H₀")
-        st.pyplot(fig2, use_container_width=True)
 
