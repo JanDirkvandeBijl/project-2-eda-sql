@@ -137,69 +137,12 @@ df_inkooporderregels_clean.loc[mask, 'DeliveryDelay'] = (
     df_inkooporderregels_clean.loc[mask, 'DeliveryDate'] - df_inkooporderregels_clean.loc[mask, 'ExpectedDeliveryDate']
 ).dt.days
 
-# -----------------------------
-# Chi-square voorbereiding
-# -----------------------------
-# -----------------------------
-# Analyse: StatusOrder vs Verantwoordelijke op orderniveau
-# -----------------------------
-# 1. Selecteer kolommen nodig voor analyse op orderniveau
-orders_group = df_inkooporderregels_clean[['OrNu', 'StatusOrder', 'Verantwoordelijke']].copy()
-
-# 2. Filter rijen zonder status of verantwoordelijke
-orders_group = orders_group[
-    orders_group['StatusOrder'].notna() &
-    orders_group['Verantwoordelijke'].notna()
-]
-
-# 3. Bepaal per order (OrNu):
-#    - eerste niet-lege StatusOrder (meestal zijn die gelijk)
-#    - eerste Verantwoordelijke (de persoon die 'm heeft ingevoerd)
-orders_per_order = orders_group.groupby('OrNu').agg({
-    'StatusOrder': 'first',
-    'Verantwoordelijke': 'first'
-}).reset_index()
-
-# 4. Bepaal de top 5 verantwoordelijken
-top5_orders = orders_per_order['Verantwoordelijke'].value_counts().nlargest(5).index
-orders_per_order['VerantwoordelijkeTop5'] = orders_per_order['Verantwoordelijke'].apply(
-    lambda x: x if x in top5_orders else 'Overig'
-)
-
-# 5. Alleen top 5 analyseren
-orders_top5 = orders_per_order[orders_per_order['VerantwoordelijkeTop5'] != 'Overig']
-
-# 6. Maak de kruistabel
-orderlevel_table = pd.crosstab(
-    orders_top5['VerantwoordelijkeTop5'],
-    orders_top5['StatusOrder']
-)
-
-# 7. Chi-square test
-chi2_orders, p_orders, dof_orders, expected_orders = chi2_contingency(orderlevel_table)
-
-# 8. Cramér's V berekenen
-n_orders = orderlevel_table.to_numpy().sum()
-phi2_orders = chi2_orders / n_orders
-r_orders, k_orders = orderlevel_table.shape
-cramers_v_orders = (phi2_orders / min(k_orders - 1, r_orders - 1)) ** 0.5
-
 
 
 # -----------------------------
 # Optional: Hook up to UI
 # -----------------------------
-ui = UI(
-    df=df_inkooporderregels_clean,
-    chi_data={
-        "observed": orderlevel_table,
-        "expected": expected_orders,
-        "chi2_stat": chi2_orders,
-        "p_value": p_orders,
-        "cramers_v": cramers_v_orders
-    }
-)
-
+ui = UI(df_inkooporderregels_clean)
 ui.year_selection()
 ui.supplier_selection()
 ui.show_date_analysis()

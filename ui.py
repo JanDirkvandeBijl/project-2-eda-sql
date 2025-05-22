@@ -7,17 +7,13 @@ import plotly.express as px
 st.set_page_config(layout="wide")
 
 class UI:
-    def __init__(self, df, chi_data=None):
+    def __init__(self, df):
         self.original_df = df.copy()
         self.selected_years = []
         self.selected_suppliers = []
         self.filtered_df = df.copy()
-        self.top_percent = 10  # default top 10%
-        self.chi_data = chi_data or {}
-    # st.write("Totaal orderregels:", len(self.filtered_df))
-    # st.write("Totaal DeliveryCount-som:", self.filtered_df['DeliveryCount'].sum())
-    # st.write("Totaal zonder DeliveryDate:", self.filtered_df['DeliveryDate'].isna().sum())
-    # st.write("Totaal FullyDelivered == True:", (self.filtered_df['FullyDelivered'] == True).sum())
+        self.top_percent = 10
+
     def year_selection(self):
         all_years = sorted(self.original_df['Datum'].dt.year.unique())
         self.selected_years = st.multiselect(
@@ -92,13 +88,7 @@ class UI:
         with tab_groups[2]:
             self.plot_performance_over_time()
         with tab_groups[3]:
-            self.show_orderlevel_chi_square(
-                observed=self.chi_data.get("observed"),
-                expected=self.chi_data.get("expected"),
-                chi2_stat=self.chi_data.get("chi2_stat"),
-                p_value=self.chi_data.get("p_value"),
-                cramers_v=self.chi_data.get("cramers_v")
-            )
+            self.plot_orderline_delivery_by_responsible()
 
     def plot_order_delivery_summary(self):
         st.info("Toont per leverancier hoeveel volledige orders te vroeg, op tijd of te laat zijn geleverd. Een order bestaat uit meerdere regels.")
@@ -237,34 +227,61 @@ class UI:
                       markers=True)
         fig.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
-    def show_orderlevel_chi_square(self, observed, expected, chi2_stat, p_value, cramers_v):
-        st.info("Toont de relatieve verdeling van orderstatussen per verantwoordelijke (top 5).")
-        st.caption("De chi-square test toetst of deze verdeling significant afwijkt van toeval.")
 
-        if observed is None or expected is None:
-            st.warning("Geen data beschikbaar voor chi-square analyse.")
+    def plot_orderline_delivery_by_responsible(self):
+        st.info("Toont per verantwoordelijke hoeveel orderregels te vroeg, op tijd of te laat zijn geleverd.")
+        st.caption("Analyse is gebaseerd op orderregel-niveau. Alleen top 5 verantwoordelijken worden meegenomen in chi-kwadraattoets.")
+
+        df = self.filtered_df.copy()
+        df = df.dropna(subset=['ExpectedDeliveryDate', 'DeliveryDate', 'Verantwoordelijke'])
+
+        if df.empty:
+            st.info("Geen bruikbare data voor analyse.")
             return
 
-        # Tabel met werkelijke frequenties
-        st.markdown("#### Werkelijke frequenties")
+        # Bepaal levercategorie
+        df['DeliveryDelay'] = (df['DeliveryDate'] - df['ExpectedDeliveryDate']).dt.days
+        df['Category'] = df['DeliveryDelay'].apply(
+            lambda x: 'Early' if x < 0 else 'On Time' if x == 0 else 'Late'
+        )
+
+        # Bepaal top 5 verantwoordelijken
+        top5 = df['Verantwoordelijke'].value_counts().nlargest(5).index
+        df['VerantwoordelijkeTop5'] = df['Verantwoordelijke'].apply(lambda x: x if x in top5 else 'Overig')
+        df_top5 = df[df['VerantwoordelijkeTop5'] != 'Overig']
+
+        if df_top5.empty:
+            st.info("Geen data beschikbaar voor top 5 verantwoordelijken.")
+            return
+
+        # Chi-kwadraattoets
+        observed = pd.crosstab(df_top5['VerantwoordelijkeTop5'], df_top5['Category'])
+
+        from scipy.stats import chi2_contingency
+        chi2_stat, p_val, dof, expected = chi2_contingency(observed)
+
+        n = observed.to_numpy().sum()
+        phi2 = chi2_stat / n
+        r, k = observed.shape
+        cramers_v = (phi2 / min(k - 1, r - 1)) ** 0.5
+
+        st.markdown("#### Werkelijke frequenties per verantwoordelijke")
         st.dataframe(observed, use_container_width=True)
 
-        # Statistieken
         col1, col2, col3 = st.columns(3)
         col1.metric("Chi²", f"{chi2_stat:.2f}")
-        col2.metric("p-waarde", f"{p_value:.4f}")
+        col2.metric("p-waarde", f"{p_val:.4f}")
         col3.metric("Cramér's V", f"{cramers_v:.3f}")
 
-        if p_value < 0.05:
+        if isinstance(p_val, float) and p_val < 0.05:
             st.success("Er is een statistisch significant verband (p < 0.05).")
         else:
             st.info("Geen statistisch significant verband (p ≥ 0.05).")
 
-        # Percentage-stacked bar chart
         relative = observed.div(observed.sum(axis=1), axis=0) * 100
         df_plot = relative.reset_index().melt(
             id_vars=relative.index.name or "VerantwoordelijkeTop5",
-            var_name='StatusOrder',
+            var_name='Category',
             value_name='Percentage'
         )
 
@@ -272,16 +289,14 @@ class UI:
             df_plot,
             x='VerantwoordelijkeTop5',
             y='Percentage',
-            color='StatusOrder',
-            title="Relatieve verdeling van orderstatussen per verantwoordelijke",
-            labels={'Percentage': '% van orders', 'VerantwoordelijkeTop5': 'Verantwoordelijke'}
+            color='Category',
+            title="Relatieve verdeling levercategorie per verantwoordelijke (Order Line Niveau)",
+            labels={'Percentage': '% van regels', 'VerantwoordelijkeTop5': 'Verantwoordelijke'}
         )
         fig.update_layout(
             barmode='stack',
-            yaxis=dict(title="% van orders", ticksuffix='%'),
+            yaxis=dict(title="% van regels", ticksuffix='%'),
             xaxis_tickangle=-45,
             height=400
         )
         st.plotly_chart(fig, use_container_width=True)
-
-
