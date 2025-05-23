@@ -1,45 +1,59 @@
-![logo_ironhack_blue 7](https://user-images.githubusercontent.com/23629340/40541063-a07a0a8a-601a-11e8-91b5-2f13e4e6b441.png)
+# Delivery Insights Dashboard
 
-# Business Challenge: EDA and SQL
+## Overview
 
-## Introduction
+**Delivery Insights Dashboard** is a modular data analytics application focused on the procurement process and supplier performance. It transforms raw JSON datasets from internal APIs into insightful, interactive visualizations. The tool is intended to help supply chain analysts, procurement teams, and operational managers understand where deliveries deviate from planning and identify improvement opportunities.
 
-A data project lifecycle has many phases, rather than being just an isolated analysis in a single tool.
-In this project you will experience doing an analysis using both Python and SQL to obtain the final result, by exploring each tool's behavior.
+The application is built using:
 
-## Project Overview
+- **Python** for backend data transformation and analytics
+- **Pandas & NumPy** for data manipulation
+- **Streamlit** for the interactive frontend UI
+- **Plotly** for visually rich, customizable charts
+- **Scipy** for statistical testing and significance analysis
 
-Pick up a dataset in our common datasets repos and break your work into big steps:
- 1. Pick a topic and choose a dataset on that topic. Build around 10 Business questions to answer about this topic.
- 	- Try to build the questions before knowing everything about the data
- 	- If not possible, do step 2. first
- 2. Data Analysis: Understand your dataset and create a report (word document) about it
- 3. Data Exploration and Business Understanding: 
- 	- Import your dataset into SQL
- 	- Answer your Business questions with SQL Queries
+All data transformations and visual outputs are dynamically generated based on user input, allowing deep dive exploration without needing to code.
 
+---
 
-## Dataset repos
+## Features
 
- - [Kaggle](https://www.kaggle.com/)
- - [Machine Learning Repository](https://archive.ics.uci.edu/)
- - [PorData](https://www.pordata.pt/)
- - [And many more](https://medium.com/@LearnPythonProgramming/best-data-sources-for-datasets-beyond-kaggle-98aac51e971e)
+### ✅ Automated Data Ingestion
+- Downloads and caches procurement and delivery datasets from local JSON endpoints
+- Ensures repeatable and fail-safe fetching using fallback and logging logic
 
+### 🧼 Robust Data Cleaning
+- Utilizes a reusable `DataFrameCleaner` utility to standardize column types and formats
+- Handles datetime conversion, missing values, string normalization, and invalid data filtering
 
-## Bonus
+### 📦 Delivery Performance Tracking
+- Calculates **expected vs. actual delivery dates** per order line
+- Derives key indicators such as:
+  - Whether a line was **fully delivered**
+  - Number of deliveries per order line
+  - Delay in days (positive or negative) relative to expected delivery
 
- - Bonus points if you augment your data with data your obtain through WebScrapping
- - Bonus points if you include visualizations from Python and/or Tableau in the final presentation
+### 📊 Advanced Visualizations
+- Uses **Plotly** for bar, line, and stacked visualizations
+- Includes supplier filtering, top-X percent segmentation, and missing value detection
+- Shows both **order-level** and **order-line-level** analyses
 
-## Deliverables
+### 📈 Timeliness & Trends
+- Tracks monthly delivery frequency per supplier
+- Visualizes how suppliers perform over time
+- Automatically highlights most active suppliers
 
-1. **Python Code:** Provide well-documented Python code that conducts the analysis and SQL upload.
-2. **SQL text file (.sql)** well commented document with all the queries answering the Business questions
-3. **Short Presentation:** Structure the presentation in the following way:
- - Intro Slides: introduce the problem and the datasets
- - Data cleaning and assumptions
- - Business questions and SQL query (1 slide per question with a print screen of the query and the answer is enough)
-4. **PDF Document** with notes you might want to share
+### 📉 Statistical Insights
+- Performs chi-squared tests for independence between delivery categories and responsible staff
+- Calculates **Cramér’s V** to evaluate effect strength
+- Flags statistically significant results and displays contingency tables interactively
 
+### 🧭 Interactive Filtering
+- Year selector: isolate one or multiple years of delivery data
+- Supplier selector: choose specific suppliers or rely on automatic relevance filtering (top %)
+- Modular layout in Streamlit tabs for clarity and drilldown
+
+---
+
+## Project Structure
 

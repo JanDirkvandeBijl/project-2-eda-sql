@@ -1,8 +1,7 @@
 import streamlit as st
-import matplotlib.pyplot as plt
-import seaborn as sns
 import pandas as pd
 import plotly.express as px
+from scipy.stats import chi2_contingency
 
 st.set_page_config(layout="wide")
 
@@ -40,18 +39,18 @@ class UI:
         if use_percentage:
             with st.expander("Advanced filter (top % of suppliers)", expanded=False):
                 self.top_percent = st.slider(
-                    label="Top % leveranciers (alleen actief als geen leverancier handmatig is gekozen):",
+                    label="Top % suppliers (only active if no supplier is manually selected):",
                     min_value=1,
                     max_value=100,
                     value=10,
                     format="%d%%",
                     label_visibility="collapsed"
                 )
-            st.caption(f"Geen leverancier geselecteerd. Filter toont top {self.top_percent}% leveranciers gesorteerd op relevantie.")
+            st.caption(f"No supplier selected. Filter shows top {self.top_percent}% suppliers sorted by relevance.")
         else:
             self.filtered_df = self.filtered_df[self.filtered_df['Naam'].isin(self.selected_suppliers)]
             self.top_percent = None
-            st.caption(f"{len(self.selected_suppliers)} leverancier(s) geselecteerd. Top-% filter is gedeactiveerd.")
+            st.caption(f"{len(self.selected_suppliers)} supplier(s) selected. Top-% filter is deactivated.")
 
     def show_date_analysis(self):
         if self.filtered_df.empty:
@@ -92,7 +91,7 @@ class UI:
             self.plot_orderline_delivery_by_responsible()
 
     def plot_order_delivery_summary(self):
-        st.info("Toont per leverancier hoeveel volledige orders te vroeg, op tijd of te laat zijn geleverd. Een order bestaat uit meerdere regels.")
+        st.info("Shows how many full orders were delivered early, on time, or late per supplier. An order consists of multiple lines.")
         st.caption("More on-time and early deliveries is better.")
 
         df = self.filtered_df.copy()
@@ -134,15 +133,16 @@ class UI:
         )
         fig.update_layout(barmode='stack', xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
+
     def plot_orderline_delivery_summary(self):
-        st.info("Toont per leverancier hoeveel orderregels te vroeg, op tijd of te laat zijn geleverd.")
+        st.info("Shows how many order lines were delivered early, on time, or late per supplier.")
         st.caption("More on-time and early deliveries is better.")
 
         df = self.filtered_df.copy()
         df = df.dropna(subset=['ExpectedDeliveryDate', 'DeliveryDate'])
 
         if df.empty:
-            st.warning("Geen bruikbare data voor analyse.")
+            st.warning("No usable data for analysis.")
             return
 
         df['DeliveryDelay'] = (df['DeliveryDate'] - df['ExpectedDeliveryDate']).dt.days
@@ -174,9 +174,8 @@ class UI:
         fig.update_layout(barmode='stack', xaxis_tickangle=-45)
         st.plotly_chart(fig, use_container_width=True)
 
-
     def plot_delivery_counts(self):
-        st.info("Toont het totaal aantal levermomenten per leverancier, gemeten op regelniveau.")
+        st.info("Shows the total number of delivery moments per supplier, measured at the line level.")
         st.caption("More deliveries is better.")
 
         grouped = self.filtered_df.groupby('Naam')['DeliveryCount'].sum().reset_index()
@@ -197,7 +196,7 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_missing_delivery_date(self):
-        st.info("Geeft per leverancier aan hoeveel orderregels nog geen leverdatum hebben.")
+        st.info("Indicates how many order lines per supplier do not have a delivery date yet.")
         st.caption("Lower is better.")
 
         df = self.filtered_df[self.filtered_df['DeliveryDate'].isna()]
@@ -221,7 +220,7 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_fully_delivered(self):
-        st.info("Laat per leverancier het aantal orderregels zien die volledig geleverd zijn.")
+        st.info("Shows per supplier the number of order lines that were fully delivered.")
         st.caption("More is better.")
 
         delivered = self.filtered_df[self.filtered_df['FullyDelivered'] == True]
@@ -244,7 +243,7 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_performance_over_time(self):
-        st.info("Visualiseert de maandelijkse frequentie van leveringen per leverancier.")
+        st.info("Visualizes the monthly frequency of deliveries per supplier.")
         st.caption("More deliveries per month is better.")
 
         df = self.filtered_df.copy()
@@ -270,35 +269,30 @@ class UI:
         st.plotly_chart(fig, use_container_width=True)
 
     def plot_orderline_delivery_by_responsible(self):
-        st.info("Toont per verantwoordelijke hoeveel orderregels te vroeg, op tijd of te laat zijn geleverd.")
-        st.caption("Analyse is gebaseerd op orderregel-niveau. Alleen top 5 verantwoordelijken worden meegenomen in chi-kwadraattoets.")
+        st.info("Shows how many order lines were delivered early, on time, or late per responsible person.")
+        st.caption("Analysis is based on order line level. Only top 5 responsible persons are included in chi-square test.")
 
         df = self.filtered_df.copy()
         df = df.dropna(subset=['ExpectedDeliveryDate', 'DeliveryDate', 'Verantwoordelijke'])
 
         if df.empty:
-            st.info("Geen bruikbare data voor analyse.")
+            st.info("No usable data for analysis.")
             return
 
-        # Bepaal levercategorie
         df['DeliveryDelay'] = (df['DeliveryDate'] - df['ExpectedDeliveryDate']).dt.days
         df['Category'] = df['DeliveryDelay'].apply(
             lambda x: 'Early' if x < 0 else 'On Time' if x == 0 else 'Late'
         )
 
-        # Bepaal top 5 verantwoordelijken
         top5 = df['Verantwoordelijke'].value_counts().nlargest(5).index
-        df['VerantwoordelijkeTop5'] = df['Verantwoordelijke'].apply(lambda x: x if x in top5 else 'Overig')
-        df_top5 = df[df['VerantwoordelijkeTop5'] != 'Overig']
+        df['VerantwoordelijkeTop5'] = df['Verantwoordelijke'].apply(lambda x: x if x in top5 else 'Other')
+        df_top5 = df[df['VerantwoordelijkeTop5'] != 'Other']
 
         if df_top5.empty:
-            st.info("Geen data beschikbaar voor top 5 verantwoordelijken.")
+            st.info("No data available for top 5 responsible persons.")
             return
 
-        # Chi-kwadraattoets
         observed = pd.crosstab(df_top5['VerantwoordelijkeTop5'], df_top5['Category'])
-
-        from scipy.stats import chi2_contingency
         chi2_stat, p_val, dof, expected = chi2_contingency(observed)
 
         n = observed.to_numpy().sum()
@@ -306,18 +300,18 @@ class UI:
         r, k = observed.shape
         cramers_v = (phi2 / min(k - 1, r - 1)) ** 0.5
 
-        st.markdown("#### Werkelijke frequenties per verantwoordelijke")
+        st.markdown("#### Actual frequencies per responsible person")
         st.dataframe(observed, use_container_width=True)
 
         col1, col2, col3 = st.columns(3)
         col1.metric("Chi²", f"{chi2_stat:.2f}")
-        col2.metric("p-waarde", f"{p_val:.4f}")
+        col2.metric("p-value", f"{p_val:.4f}")
         col3.metric("Cramér's V", f"{cramers_v:.3f}")
 
         if isinstance(p_val, float) and p_val < 0.05:
-            st.success("Er is een statistisch significant verband (p < 0.05).")
+            st.success("There is a statistically significant association (p < 0.05).")
         else:
-            st.info("Geen statistisch significant verband (p ≥ 0.05).")
+            st.info("No statistically significant association (p ≥ 0.05).")
 
         relative = observed.div(observed.sum(axis=1), axis=0) * 100
         df_plot = relative.reset_index().melt(
@@ -331,12 +325,12 @@ class UI:
             x='VerantwoordelijkeTop5',
             y='Percentage',
             color='Category',
-            title="Relatieve verdeling levercategorie per verantwoordelijke (Order Line Niveau)",
-            labels={'Percentage': '% van regels', 'VerantwoordelijkeTop5': 'Verantwoordelijke'}
+            title="Relative distribution of delivery categories per responsible person (Order Line Level)",
+            labels={'Percentage': '% of lines', 'VerantwoordelijkeTop5': 'Responsible'}
         )
         fig.update_layout(
             barmode='stack',
-            yaxis=dict(title="% van regels", ticksuffix='%'),
+            yaxis=dict(title="% of lines", ticksuffix='%'),
             xaxis_tickangle=-45,
             height=400
         )

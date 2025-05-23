@@ -1,12 +1,10 @@
 # -----------------------------
 # Imports and Initial Setup
 # -----------------------------
-import pandas as pd
-from eda_service import EDAService
 from cleanup import DataFrameCleaner
 from loader import load_all_datasets
 from ui import UI
-from scipy.stats import chi2_contingency
+
 
 # -----------------------------
 # Load Datasets
